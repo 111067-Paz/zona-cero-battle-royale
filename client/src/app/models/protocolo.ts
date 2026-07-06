@@ -10,6 +10,7 @@ export type Version = typeof VERSION_PROTOCOLO;
 export type AccionJugador = 'RECOGER' | 'USAR_BOTIQUIN';
 export type EstadoVida = 'VIVO' | 'MUERTO';
 export type EstadoPartida = 'EN_LOBBY' | 'CUENTA_REGRESIVA' | 'EN_CURSO' | 'FINALIZADA';
+export type TipoArma = 'PISTOLA' | 'ESCOPETA' | 'RIFLE';
 
 export interface VectorMensaje {
   x: number;
@@ -70,6 +71,16 @@ export interface JugadorSnapshot {
   hp: number;
   estadoVida: EstadoVida;
   conectado: boolean;
+  arma: TipoArma;
+  kills: number;
+}
+
+export interface ProyectilSnapshot {
+  /** idRed monotonico, jamas reciclado (R2). El cliente interpola por este id. */
+  id: number;
+  x: number;
+  y: number;
+  angulo: number;
 }
 
 export interface Snapshot {
@@ -82,6 +93,15 @@ export interface Snapshot {
   /** Ultima `sec` procesada por jugador (habilita la prediccion de la Fase 7). */
   acks: Record<string, number>;
   jugadores: JugadorSnapshot[];
+  proyectiles: ProyectilSnapshot[];
 }
 
-export type MensajeServidor = Bienvenida | Snapshot;
+export interface Evento {
+  v: Version;
+  tipo: 'EVENTO';
+  /** Clase de evento. Fase 2: 'KILL'. Crecera (MUERTE_ZONA, RECOGIDO, FIN_PARTIDA...). */
+  evento: string;
+  datos: Record<string, string>;
+}
+
+export type MensajeServidor = Bienvenida | Snapshot | Evento;

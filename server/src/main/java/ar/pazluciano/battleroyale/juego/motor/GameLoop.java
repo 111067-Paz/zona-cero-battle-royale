@@ -1,11 +1,13 @@
 package ar.pazluciano.battleroyale.juego.motor;
 
 import ar.pazluciano.battleroyale.comun.config.ConfiguracionJuego;
+import ar.pazluciano.battleroyale.juego.dominio.combate.EventoKill;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Jugador;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Partida;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Vector2;
 import ar.pazluciano.battleroyale.juego.protocolo.Bienvenida;
 import ar.pazluciano.battleroyale.juego.protocolo.ConfigBienvenida;
+import ar.pazluciano.battleroyale.juego.protocolo.Evento;
 import ar.pazluciano.battleroyale.juego.protocolo.Input;
 import ar.pazluciano.battleroyale.juego.protocolo.VectorMensaje;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
@@ -117,7 +120,26 @@ public class GameLoop {
         partida.avanzarTick();
         if (partida.getTick() % config.ticksPorSnapshot() == 0) {
             emisor.emitir(ensamblador.desde(partida));
+            emitirEventos();
         }
+    }
+
+    /** Emite los eventos acumulados DESPUES del snapshot (R22): el cliente nunca ve un KILL de un
+     *  estado que todavia no vio. */
+    private void emitirEventos() {
+        for (EventoKill kill : partida.drenarEventos()) {
+            emisor.emitir(aEvento(kill));
+        }
+    }
+
+    private Evento aEvento(EventoKill kill) {
+        return Evento.builder()
+                .evento("KILL")
+                .datos(Map.of(
+                        "asesino", kill.getIdAsesino(),
+                        "victima", kill.getIdVictima(),
+                        "arma", kill.getArma().name()))
+                .build();
     }
 
     /**

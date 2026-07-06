@@ -45,4 +45,7 @@ public class Snapshot {
 
     /** Jugadores visibles, copia por valor. */
     private List<JugadorSnapshot> jugadores;
+
+    /** Proyectiles en vuelo, copia por valor. Cada {@code id} es un idRed jamas reciclado (R2). */
+    private List<ProyectilSnapshot> proyectiles;
 }

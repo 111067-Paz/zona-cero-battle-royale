@@ -1,12 +1,13 @@
-import { Injectable, signal } from '@angular/core';
+import { computed, Injectable, signal } from '@angular/core';
 import {
   Bienvenida,
   ConfigBienvenida,
-  EstadoPartida,
+  Evento,
   JugadorSnapshot,
+  ProyectilSnapshot,
   Snapshot,
 } from '../../models/protocolo';
-import { EstadoVisual, JugadorVisual } from './estado-visual';
+import { EstadoVisual, JugadorVisual, LineaKill, NumeroDanio, ProyectilVisual } from './estado-visual';
 
 interface SnapshotFechado {
   recibidoEn: number;
@@ -14,15 +15,13 @@ interface SnapshotFechado {
 }
 
 /**
- * Buffer de snapshots + interpolacion (PLAN §7-C pasos 7-8). Recibe el stream del servidor, mantiene
- * los ultimos {@link BUFFER_MAX} y produce el estado visual pidiendo render ~100 ms EN EL PASADO,
- * interpolando entre los dos snapshots que encierran ese instante.
+ * Buffer de snapshots + interpolacion (PLAN §7-C). Recibe el stream del servidor, mantiene los ultimos
+ * {@link BUFFER_MAX} y produce el estado visual pidiendo render ~100 ms EN EL PASADO.
  *
- * <p>Separacion clave (zoneless): los signals del HUD se actualizan SOLO al llegar un snapshot
- * (<=15/s), nunca por frame. El renderer, en cambio, llama a {@link estadoVisual} a 60 fps sin tocar
- * signals. Reglas anti-bug: descarte de ticks viejos/duplicados, arco corto de angulos (R8), snap sin
- * lerp si la distancia supera {@link DISTANCIA_SNAP} (R9) y resincronizacion fria si el buffer quedo
- * viejo (pestana en background).
+ * <p>Fase 2: ademas interpola PROYECTILES por su idRed (los nuevos aparecen sin lerp; los conocidos se
+ * interpolan linealmente, sin el snap por distancia de los jugadores, porque viajan lejos por
+ * snapshot); computa NUMEROS DE DANIO por diff de HP entre snapshots (R29); y arma el KILL FEED desde
+ * los EVENTO KILL. Todo lo del HUD se actualiza por snapshot/evento (signals), jamas por frame.
  */
 @Injectable({ providedIn: 'root' })
 export class EstadoPartidaStore {
@@ -30,17 +29,42 @@ export class EstadoPartidaStore {
   private static readonly RETRASO_INTERP_MS = 100;
   private static readonly DISTANCIA_SNAP = 3;
   private static readonly EDAD_MAXIMA_MS = 1000;
+  private static readonly DURACION_DANIO_MS = 600;
+  private static readonly MAX_KILL_FEED = 5;
 
   private buffer: SnapshotFechado[] = [];
   private ultimoTick = -1;
+  private numerosDanio: NumeroDanio[] = [];
 
   readonly config = signal<ConfigBienvenida | null>(null);
   readonly idJugador = signal<string | null>(null);
   readonly idPartida = signal<string | null>(null);
   readonly idMapa = signal<string | null>(null);
 
-  /** Ultimo snapshot recibido, para los signals del HUD (HP, kills, estado, etc.). */
+  /** Ultimo snapshot recibido, para los signals del HUD (HP, arma, kills, estado). */
   readonly ultimoSnapshot = signal<Snapshot | null>(null);
+
+  /** Kill feed (mas reciente primero, tope MAX_KILL_FEED). Se actualiza por EVENTO, no por frame. */
+  readonly killFeed = signal<LineaKill[]>([]);
+
+  /** El jugador propio en el ultimo snapshot (HP, arma, kills del HUD). */
+  readonly jugadorPropio = computed<JugadorSnapshot | null>(() => {
+    const snapshot = this.ultimoSnapshot();
+    const idPropio = this.idJugador();
+    if (snapshot === null || idPropio === null) {
+      return null;
+    }
+    return snapshot.jugadores.find((jugador) => jugador.id === idPropio) ?? null;
+  });
+
+  /** Cantidad de jugadores VIVOS, para el indicador ALIVE del HUD. */
+  readonly vivos = computed<number>(() => {
+    const snapshot = this.ultimoSnapshot();
+    if (snapshot === null) {
+      return 0;
+    }
+    return snapshot.jugadores.filter((jugador) => jugador.estadoVida === 'VIVO').length;
+  });
 
   aplicarBienvenida(bienvenida: Bienvenida): void {
     this.config.set(bienvenida.config);
@@ -54,6 +78,7 @@ export class EstadoPartidaStore {
     if (snapshot.tick <= this.ultimoTick) {
       return; // viejo o duplicado
     }
+    this.registrarDanios(this.ultimoSnapshot(), snapshot);
     this.ultimoTick = snapshot.tick;
     this.buffer.push({ recibidoEn: performance.now(), snapshot });
     if (this.buffer.length > EstadoPartidaStore.BUFFER_MAX) {
@@ -62,17 +87,27 @@ export class EstadoPartidaStore {
     this.ultimoSnapshot.set(snapshot);
   }
 
+  aplicarEvento(evento: Evento): void {
+    if (evento.evento !== 'KILL') {
+      return;
+    }
+    const linea: LineaKill = {
+      asesino: evento.datos['asesino'] ?? '',
+      victima: evento.datos['victima'] ?? '',
+      arma: evento.datos['arma'] ?? '',
+      creadoEn: performance.now(),
+    };
+    this.killFeed.update((actual) => [linea, ...actual].slice(0, EstadoPartidaStore.MAX_KILL_FEED));
+  }
+
   reiniciar(): void {
     this.buffer = [];
     this.ultimoTick = -1;
+    this.numerosDanio = [];
     this.ultimoSnapshot.set(null);
+    this.killFeed.set([]);
   }
 
-  /**
-   * Estado interpolado para el instante {@code ahora} (tipicamente {@code performance.now()}).
-   * Devuelve null si aun no hay datos. Si el snapshot mas nuevo quedo viejo (> 1 s), hace
-   * resincronizacion fria: dibuja ese ultimo estado sin interpolar en lugar de estirar un hueco.
-   */
   estadoVisual(ahora: number): EstadoVisual | null {
     if (this.buffer.length === 0) {
       return null;
@@ -81,17 +116,35 @@ export class EstadoPartidaStore {
     if (ahora - masNuevo.recibidoEn > EstadoPartidaStore.EDAD_MAXIMA_MS) {
       return this.sinInterpolar(masNuevo.snapshot);
     }
-
     const objetivo = ahora - EstadoPartidaStore.RETRASO_INTERP_MS;
     const par = this.parQueEncierra(objetivo);
     if (par === null) {
       return this.sinInterpolar(masNuevo.snapshot);
     }
-
     const [anterior, siguiente] = par;
     const rango = siguiente.recibidoEn - anterior.recibidoEn;
     const t = rango <= 0 ? 1 : this.acotar((objetivo - anterior.recibidoEn) / rango);
     return this.interpolar(anterior.snapshot, siguiente.snapshot, t);
+  }
+
+  private registrarDanios(previo: Snapshot | null, actual: Snapshot): void {
+    if (previo === null) {
+      return;
+    }
+    const ahora = performance.now();
+    const hpPrevio = new Map<string, number>();
+    for (const jugador of previo.jugadores) {
+      hpPrevio.set(jugador.id, jugador.hp);
+    }
+    for (const jugador of actual.jugadores) {
+      const anterior = hpPrevio.get(jugador.id);
+      if (anterior !== undefined && jugador.hp < anterior) {
+        this.numerosDanio.push({ x: jugador.x, y: jugador.y, cantidad: anterior - jugador.hp, creadoEn: ahora });
+      }
+    }
+    this.numerosDanio = this.numerosDanio.filter(
+      (numero) => ahora - numero.creadoEn < EstadoPartidaStore.DURACION_DANIO_MS,
+    );
   }
 
   private parQueEncierra(objetivo: number): [SnapshotFechado, SnapshotFechado] | null {
@@ -111,7 +164,36 @@ export class EstadoPartidaStore {
     const jugadores: JugadorVisual[] = siguiente.jugadores.map((destino) =>
       this.interpolarJugador(previos.get(destino.id), destino, t),
     );
-    return { tick: siguiente.tick, estado: siguiente.estado, jugadores };
+    return {
+      tick: siguiente.tick,
+      estado: siguiente.estado,
+      jugadores,
+      proyectiles: this.interpolarProyectiles(anterior.proyectiles, siguiente.proyectiles, t),
+      numerosDanio: this.numerosDanio,
+    };
+  }
+
+  private interpolarProyectiles(
+    anteriores: ProyectilSnapshot[],
+    siguientes: ProyectilSnapshot[],
+    t: number,
+  ): ProyectilVisual[] {
+    const previos = new Map<number, ProyectilSnapshot>();
+    for (const proyectil of anteriores) {
+      previos.set(proyectil.id, proyectil);
+    }
+    return siguientes.map((destino) => {
+      const origen = previos.get(destino.id);
+      if (origen === undefined) {
+        return { id: destino.id, x: destino.x, y: destino.y, angulo: destino.angulo }; // nuevo -> snap
+      }
+      return {
+        id: destino.id,
+        x: this.lerp(origen.x, destino.x, t),
+        y: this.lerp(origen.y, destino.y, t),
+        angulo: destino.angulo,
+      };
+    });
   }
 
   private interpolarJugador(
@@ -120,7 +202,7 @@ export class EstadoPartidaStore {
     t: number,
   ): JugadorVisual {
     if (origen === undefined || this.distancia(origen, destino) > EstadoPartidaStore.DISTANCIA_SNAP) {
-      return this.visualDe(destino); // spawn o teleport: snap sin lerp (R9)
+      return this.visualDe(destino);
     }
     return {
       id: destino.id,
@@ -138,6 +220,13 @@ export class EstadoPartidaStore {
       tick: snapshot.tick,
       estado: snapshot.estado,
       jugadores: snapshot.jugadores.map((jugador) => this.visualDe(jugador)),
+      proyectiles: snapshot.proyectiles.map((proyectil) => ({
+        id: proyectil.id,
+        x: proyectil.x,
+        y: proyectil.y,
+        angulo: proyectil.angulo,
+      })),
+      numerosDanio: this.numerosDanio,
     };
   }
 
@@ -161,7 +250,6 @@ export class EstadoPartidaStore {
     return a + (b - a) * t;
   }
 
-  /** Interpola angulos por el arco corto: nunca cruza +-pi por el camino largo (R8). */
   private interpolarAngulo(a: number, b: number, t: number): number {
     let delta = b - a;
     while (delta > Math.PI) {

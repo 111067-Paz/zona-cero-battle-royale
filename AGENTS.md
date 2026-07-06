@@ -75,6 +75,7 @@ Reglas que se revisan en TODO PR:
 | `ng test` dice "No test files found" | Modo **watch** del builder experimental `@angular/build:unit-test` | `ng test --watch=false` |
 | Comandos fallan por el path | La carpeta tiene espacios y paréntesis: `Battle royale (LL)` | Git Bash con comillas: `cd "/f/Proyectos/Battle royale (LL)"` |
 | Error raro de librería tras upgrade | El conocimiento del modelo puede ser viejo | **Inspeccionar el jar real**: `unzip -l <jar>` para paquetes, `javap -cp <jar> <Clase>` para firmas. NO adivinar |
+| `X is not public in Y; cannot be accessed from outside package` en el dominio | Un método package-private de una clase de `dominio/combate` (ej. `Proyectil.avanzarA`) llamado desde `dominio/partida` (`Partida`) — son paquetes DISTINTOS aunque ambos sean "dominio puro" | Package-private solo sirve si la clase llamante comparte paquete (como `Jugador`↔`Partida`). Cruzando de `combate`↔`partida`, el método debe ser `public` — la seguridad de concurrencia la da el hilo del loop (§2.4), no la visibilidad |
 
 ## 6. Comandos (los corre el humano)
 
@@ -112,10 +113,12 @@ Al terminar trabajo significativo: `mem_save` con lo aprendido (obligatorio, no 
   esquinas (deslizamiento), dos pestañas se ven. `ResolutorColisiones` (círculo-vs-AABB push-out),
   carga fail-fast, `GET /api/mapas/{id}`, renderer con culling. Decisiones: move-then-resolve sin
   sweep (obstáculos ≥1u, validado); `mundo` se mantiene en BIENVENIDA.
-- [ ] **Fase 2 — Combate**
-  DoD: dos pestañas, una mata a la otra; la cadencia la impone el SERVER aunque el cliente spamee;
-  números de daño flotan (diff de HP, R29). Cuidado: `idRed` monotónico JAMÁS reciclado (R2),
-  colisión por segmento (anti-tunneling), HUD SIN munición (R10/R31).
+- [x] **Fase 2 — Combate** *(cerrada 2026-07-06)*
+  DoD validado: dos pestañas, una mata a la otra; cadencia server-side (spam no acelera);
+  números de daño flotan; kill feed + KILLS suben; muerto queda gris; balas bloqueadas por cajas.
+  `idRed` monotónico (pool diferido a F7), colisión por segmento (anti-tunneling real), HUD sin
+  munición (R10/R31). Gotcha: métodos de `Proyectil` llamados desde `Partida` (paquete distinto,
+  `dominio.combate` vs `dominio.partida`) deben ser `public`, no package-private.
 - [ ] **Fase 3 — Bots**
   DoD: 1 humano vs 9 bots jugable y desafiante en dificultad media. Bots escriben la MISMA
   `IntencionJugador` que un humano (cero `if (esBot)` en la simulación); no disparan a través

@@ -15,7 +15,17 @@
       "angulo": 1.57,
       "hp": 100,
       "estadoVida": "VIVO",
-      "conectado": true
+      "conectado": true,
+      "arma": "PISTOLA",
+      "kills": 2
+    }
+  ],
+  "proyectiles": [
+    {
+      "id": 4711,
+      "x": 13.1,
+      "y": 39.0,
+      "angulo": 1.57
     }
   ]
 }

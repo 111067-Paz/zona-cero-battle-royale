@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "tipo": "EVENTO",
+  "evento": "KILL",
+  "datos": {
+    "asesino": "j-2",
+    "victima": "j-1",
+    "arma": "ESCOPETA"
+  }
+}

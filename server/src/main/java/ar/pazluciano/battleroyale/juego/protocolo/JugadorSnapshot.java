@@ -1,5 +1,6 @@
 package ar.pazluciano.battleroyale.juego.protocolo;
 
+import ar.pazluciano.battleroyale.juego.dominio.combate.TipoArma;
 import ar.pazluciano.battleroyale.juego.dominio.partida.EstadoVida;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -27,4 +28,6 @@ public class JugadorSnapshot {
     private int hp;
     private EstadoVida estadoVida;
     private boolean conectado;
+    private TipoArma arma;
+    private int kills;
 }

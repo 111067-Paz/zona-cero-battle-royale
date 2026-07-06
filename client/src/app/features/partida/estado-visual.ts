@@ -14,8 +14,33 @@ export interface JugadorVisual {
   conectado: boolean;
 }
 
+export interface ProyectilVisual {
+  id: number;
+  x: number;
+  y: number;
+  angulo: number;
+}
+
+/** Numero de dano flotante, derivado del diff de HP entre snapshots (R29). Lo anima el renderer. */
+export interface NumeroDanio {
+  x: number;
+  y: number;
+  cantidad: number;
+  creadoEn: number;
+}
+
 export interface EstadoVisual {
   tick: number;
   estado: EstadoPartida;
   jugadores: JugadorVisual[];
+  proyectiles: ProyectilVisual[];
+  numerosDanio: NumeroDanio[];
+}
+
+/** Linea del kill feed, derivada de un EVENTO KILL. */
+export interface LineaKill {
+  asesino: string;
+  victima: string;
+  arma: string;
+  creadoEn: number;
 }

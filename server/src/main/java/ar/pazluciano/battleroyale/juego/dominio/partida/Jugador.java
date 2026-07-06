@@ -1,5 +1,6 @@
 package ar.pazluciano.battleroyale.juego.dominio.partida;
 
+import ar.pazluciano.battleroyale.juego.dominio.combate.Arma;
 import lombok.Getter;
 
 /**
@@ -25,6 +26,14 @@ public class Jugador {
     private int hp;
     private EstadoVida estadoVida = EstadoVida.VIVO;
     private boolean conectado = true;
+
+    /** Arma equipada. La Partida asigna la inicial (Pistola, R17); el loot la cambia (F4). */
+    private Arma arma;
+
+    /** Ticks que faltan para poder volver a disparar. La cadencia es server-side (anti macro). */
+    private int cooldownRestante = 0;
+
+    private int kills = 0;
 
     /** Ultima secuencia de INPUT procesada. Base del descarte anti-replay/duplicado (§5.1). */
     private long ultimaSec = 0L;
@@ -58,6 +67,44 @@ public class Jugador {
     /** Fija el angulo de apuntado. Solo la {@link Partida} lo llama, dentro del tick. */
     void apuntarA(double nuevoAngulo) {
         this.angulo = nuevoAngulo;
+    }
+
+    /** Equipa un arma (loadout inicial o loot). */
+    public void equipar(Arma arma) {
+        this.arma = arma;
+    }
+
+    public boolean estaVivo() {
+        return estadoVida == EstadoVida.VIVO;
+    }
+
+    public boolean estaEnCooldown() {
+        return cooldownRestante > 0;
+    }
+
+    /** Arranca el enfriamiento tras disparar (cadencia del arma, en ticks). */
+    void reiniciarCooldown(int ticks) {
+        this.cooldownRestante = ticks;
+    }
+
+    /** Baja el cooldown un tick (no baja de cero). Lo llama la Partida cada tick. */
+    void decrementarCooldown() {
+        if (cooldownRestante > 0) {
+            cooldownRestante--;
+        }
+    }
+
+    /** Aplica dano; si la vida llega a cero, el jugador muere (queda de espectador). */
+    void recibirDanio(int dano) {
+        hp -= dano;
+        if (hp <= 0) {
+            hp = 0;
+            estadoVida = EstadoVida.MUERTO;
+        }
+    }
+
+    void sumarKill() {
+        kills++;
     }
 
     public void marcarDesconectado() {

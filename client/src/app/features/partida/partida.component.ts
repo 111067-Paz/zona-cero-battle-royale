@@ -2,7 +2,6 @@ import {
   AfterViewInit,
   ChangeDetectionStrategy,
   Component,
-  computed,
   ElementRef,
   inject,
   OnDestroy,
@@ -13,6 +12,7 @@ import { MensajeServidor, VERSION_PROTOCOLO } from '../../models/protocolo';
 import { ConexionPartidaService } from './conexion-partida.service';
 import { EntradaService } from './entrada.service';
 import { EstadoPartidaStore } from './estado-partida.store';
+import { HudComponent } from './hud.component';
 import { MapaService } from './mapa.service';
 import { RendererJuego } from './render/renderer-juego';
 import { RendererTopDown2D } from './render/renderer-top-down-2d';
@@ -29,18 +29,17 @@ import { RendererTopDown2D } from './render/renderer-top-down-2d';
 @Component({
   selector: 'app-partida',
   standalone: true,
+  imports: [HudComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="contenedor">
       <canvas #lienzo class="lienzo"></canvas>
-      <div class="hud">
+      <app-hud />
+      <div class="pie">
         <span class="estado" [class.estado--ok]="estadoConexion() === 'conectado'">
           {{ estadoConexion() }}
         </span>
-        @if (hpPropio() !== null) {
-          <span class="hp">HP {{ hpPropio() }}</span>
-        }
-        <span class="pista">WASD para moverte · mouse para apuntar</span>
+        <span class="pista">WASD moverte · mouse apuntar · click disparar</span>
       </div>
     </div>
   `,
@@ -56,9 +55,9 @@ import { RendererTopDown2D } from './render/renderer-top-down-2d';
         width: 100%;
         height: 100%;
       }
-      .hud {
+      .pie {
         position: absolute;
-        top: 12px;
+        bottom: 12px;
         left: 12px;
         display: flex;
         gap: 10px;
@@ -66,7 +65,6 @@ import { RendererTopDown2D } from './render/renderer-top-down-2d';
         font-weight: 700;
       }
       .estado,
-      .hp,
       .pista {
         border: 3px solid var(--color-thick-border);
         border-radius: 10px;
@@ -77,9 +75,6 @@ import { RendererTopDown2D } from './render/renderer-top-down-2d';
         font-size: 13px;
       }
       .estado--ok {
-        color: var(--color-health-lime);
-      }
-      .hp {
         color: var(--color-health-lime);
       }
     `,
@@ -97,15 +92,6 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
   private rafId = 0;
 
   readonly estadoConexion = this.conexion.estado;
-  readonly hpPropio = computed(() => {
-    const snapshot = this.store.ultimoSnapshot();
-    const idPropio = this.store.idJugador();
-    if (snapshot === null || idPropio === null) {
-      return null;
-    }
-    const jugador = snapshot.jugadores.find((candidato) => candidato.id === idPropio);
-    return jugador ? jugador.hp : null;
-  });
 
   async ngAfterViewInit(): Promise<void> {
     const canvas = this.lienzo().nativeElement;
@@ -142,6 +128,9 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
         break;
       case 'SNAPSHOT':
         this.store.aplicarSnapshot(mensaje);
+        break;
+      case 'EVENTO':
+        this.store.aplicarEvento(mensaje);
         break;
     }
   }

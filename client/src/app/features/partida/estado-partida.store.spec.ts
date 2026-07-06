@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { JugadorSnapshot, Snapshot } from '../../models/protocolo';
+import { Evento, JugadorSnapshot, ProyectilSnapshot, Snapshot } from '../../models/protocolo';
 import { EstadoPartidaStore } from './estado-partida.store';
 
-function jugador(id: string, x: number, y: number, angulo = 0): JugadorSnapshot {
-  return { id, x, y, angulo, hp: 100, estadoVida: 'VIVO', conectado: true };
+function jugador(id: string, x: number, y: number, angulo = 0, hp = 100): JugadorSnapshot {
+  return { id, x, y, angulo, hp, estadoVida: 'VIVO', conectado: true, arma: 'PISTOLA', kills: 0 };
 }
 
-function snapshot(tick: number, jugadores: JugadorSnapshot[]): Snapshot {
-  return { v: 1, tipo: 'SNAPSHOT', tick, estado: 'EN_CURSO', tickInicio: 0, acks: {}, jugadores };
+function snapshot(
+  tick: number,
+  jugadores: JugadorSnapshot[],
+  proyectiles: ProyectilSnapshot[] = [],
+): Snapshot {
+  return { v: 1, tipo: 'SNAPSHOT', tick, estado: 'EN_CURSO', tickInicio: 0, acks: {}, jugadores, proyectiles };
 }
 
 describe('EstadoPartidaStore', () => {
@@ -26,7 +30,6 @@ describe('EstadoPartidaStore', () => {
     tiempo = 1100;
     store.aplicarSnapshot(snapshot(4, [jugador('j-1', 2, 0)]));
 
-    // objetivo = 1150 - 100 = 1050, a mitad de camino entre 1000 y 1100 -> t = 0.5
     const estado = store.estadoVisual(1150);
 
     expect(estado).not.toBeNull();
@@ -52,7 +55,6 @@ describe('EstadoPartidaStore', () => {
 
     const estado = store.estadoVisual(1150);
 
-    // Por el arco corto pasa cerca de pi (~3.14), NO por 0.
     expect(Math.abs(estado!.jugadores[0].angulo)).toBeGreaterThan(3.0);
   });
 
@@ -67,4 +69,48 @@ describe('EstadoPartidaStore', () => {
   it('devuelve null si todavia no llego ningun snapshot', () => {
     expect(store.estadoVisual(1000)).toBeNull();
   });
+
+  it('genera un numero de dano cuando el HP de un jugador baja entre snapshots (R29)', () => {
+    tiempo = 1000;
+    store.aplicarSnapshot(snapshot(2, [jugador('j-1', 5, 5, 0, 100)]));
+    tiempo = 1050;
+    store.aplicarSnapshot(snapshot(4, [jugador('j-1', 5, 5, 0, 80)]));
+
+    const estado = store.estadoVisual(1050);
+
+    expect(estado!.numerosDanio.length).toBe(1);
+    expect(estado!.numerosDanio[0].cantidad).toBe(20);
+  });
+
+  it('arma el kill feed desde un EVENTO KILL', () => {
+    const evento: Evento = {
+      v: 1,
+      tipo: 'EVENTO',
+      evento: 'KILL',
+      datos: { asesino: 'j-2', victima: 'j-1', arma: 'PISTOLA' },
+    };
+
+    store.aplicarEvento(evento);
+
+    expect(store.killFeed().length).toBe(1);
+    expect(store.killFeed()[0].victima).toBe('j-1');
+  });
+
+  it('interpola un proyectil conocido y hace snap de uno nuevo por su idRed', () => {
+    tiempo = 1000;
+    store.aplicarSnapshot(snapshot(2, [jugador('j-1', 0, 0)], [proyectil(1, 0, 0)]));
+    tiempo = 1100;
+    store.aplicarSnapshot(snapshot(4, [jugador('j-1', 0, 0)], [proyectil(1, 8, 0), proyectil(2, 50, 50)]));
+
+    const estado = store.estadoVisual(1150);
+
+    const conocido = estado!.proyectiles.find((p) => p.id === 1)!;
+    const nuevo = estado!.proyectiles.find((p) => p.id === 2)!;
+    expect(conocido.x).toBeCloseTo(4, 5); // interpolado a t=0.5
+    expect(nuevo.x).toBe(50); // nuevo -> snap
+  });
 });
+
+function proyectil(id: number, x: number, y: number): ProyectilSnapshot {
+  return { id, x, y, angulo: 0 };
+}
