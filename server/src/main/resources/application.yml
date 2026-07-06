@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: battle-royale-server
+  # H2 en memoria. En la Fase 0 no hay entidades todavia (la plataforma llega en la Fase 5):
+  # JPA queda en el classpath pero sin nada que mapear. open-in-view off por higiene.
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+
+# Constantes de gameplay (PLAN §1.3). Tunables por configuracion, jamas hardcodeadas en el codigo.
+# Las que el cliente necesita (tickRate, snapshotRate, mundo, velocidadJugador) viajan en BIENVENIDA.
+juego:
+  tick-rate: 30                 # ticks/s; dt fijo = 1/tickRate. El loop nunca usa reloj de pared
+  snapshot-rate: 15             # snapshots/s (1 cada 2 ticks). El cliente interpola
+  jugadores-por-partida: 10     # humanos + bots hasta completar
+  mundo: 256                    # mundo cuadrado de 256 x 256 unidades (1u ~ 1m)
+  radio-jugador: 0.5            # colision circular
+  velocidad-jugador: 5.0        # u/s; clampeada SIEMPRE server-side (anti speed-hack)
+  vida: 100                     # HP inicial
+
+server:
+  port: 8080
