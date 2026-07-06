@@ -1,3 +1,4 @@
+import { Mapa } from '../../../models/mapa';
 import { EstadoVisual } from '../estado-visual';
 
 /**
@@ -9,6 +10,9 @@ import { EstadoVisual } from '../estado-visual';
 export interface RendererJuego {
   /** Inicializa el contexto de dibujo sobre el canvas dado. Puede ser asincrono (WebGL). */
   iniciar(canvas: HTMLCanvasElement): Promise<void>;
+
+  /** Fija el mapa estatico (fondo, obstaculos, decoracion) que se baja UNA vez por REST. */
+  establecerMapa(mapa: Mapa): void;
 
   /** Dibuja un frame a partir del estado visual YA interpolado y del id del jugador propio (camara). */
   renderizar(estado: EstadoVisual, idJugadorPropio: string | null): void;

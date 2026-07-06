@@ -1,5 +1,8 @@
 package ar.pazluciano.battleroyale.juego.dominio.partida;
 
+import ar.pazluciano.battleroyale.juego.dominio.mapa.MapaJuego;
+import ar.pazluciano.battleroyale.juego.dominio.mapa.ResolutorColisiones;
+import lombok.AccessLevel;
 import lombok.Getter;
 
 import java.util.Collection;
@@ -17,19 +20,23 @@ import java.util.Random;
  * <p>Determinismo total (PLAN §2.7): dt fijo, RNG con semilla por partida (jamas {@code Math.random}),
  * e iteracion estable de jugadores. Misma semilla + misma secuencia de comandos = mismo resultado.
  *
- * <p>Fase 0: arranca hardcodeada en {@link EstadoPartida#EN_CURSO} con un solo movimiento posible
- * (desplazamiento con clamp a los bordes del mundo). El resto de estados, combate y zona llegan en
- * fases siguientes SIN tocar esta firma.
+ * <p>Fase 1: arranca hardcodeada en {@link EstadoPartida#EN_CURSO} sobre un {@link MapaJuego} con
+ * obstaculos. El movimiento resuelve colision circulo-vs-AABB con deslizamiento y los spawns salen de
+ * los puntos validados del mapa. El resto de estados, combate y zona llegan en fases siguientes.
  */
 @Getter
 public class Partida {
 
-    /** Fraccion del mundo que se deja como margen de spawn para no nacer pegado al borde. */
-    private static final double MARGEN_SPAWN_EN_RADIOS = 4.0;
-
     private final String id;
+    private final MapaJuego mapa;
     private final ParametrosSimulacion params;
+
+    /** RNG sembrado, fuente de aleatoriedad deterministica de la partida (dispersion, botin: F2+). */
+    @Getter(AccessLevel.NONE)
     private final Random rng;
+
+    @Getter(AccessLevel.NONE)
+    private final ResolutorColisiones resolutor = new ResolutorColisiones();
 
     /** LinkedHashMap: lookup O(1) por id + iteracion en orden de insercion (determinismo). */
     private final Map<String, Jugador> jugadores = new LinkedHashMap<>();
@@ -40,18 +47,21 @@ public class Partida {
     private long tick = 0L;
     private int proximoOrdenUnion = 0;
 
-    public Partida(String id, ParametrosSimulacion params, long semilla) {
+    public Partida(String id, MapaJuego mapa, ParametrosSimulacion params, long semilla) {
         this.id = id;
+        this.mapa = mapa;
         this.params = params;
         this.rng = new Random(semilla);
     }
 
     /**
-     * Alta de un jugador con posicion de spawn deterministica (derivada del RNG sembrado). Nace VIVO,
-     * conectado y con la vida inicial. Devuelve el jugador creado para que el motor lo referencie.
+     * Alta de un jugador en un spawn del mapa (asignado por orden de union, ya validado libre de
+     * obstaculos). Nace VIVO, conectado y con la vida inicial. Devuelve el jugador para que el motor
+     * lo referencie.
      */
     public Jugador agregarJugador(String idJugador) {
-        Jugador jugador = new Jugador(idJugador, proximoOrdenUnion++, spawnDeterminista(), params.getVidaInicial());
+        int ordenUnion = proximoOrdenUnion++;
+        Jugador jugador = new Jugador(idJugador, ordenUnion, mapa.spawnPara(ordenUnion), params.getVidaInicial());
         jugadores.put(idJugador, jugador);
         return jugador;
     }
@@ -77,9 +87,9 @@ public class Partida {
     }
 
     /**
-     * Avanza la simulacion un paso fijo {@code dt}. Fase 0: mueve a cada jugador VIVO segun su
-     * intencion (re-normalizada para no exceder la velocidad) y lo mantiene dentro de los bordes del
-     * mundo por clamp (deslizamiento contra el borde). Al final incrementa el contador de tick.
+     * Avanza la simulacion un paso fijo {@code dt}: mueve a cada jugador VIVO segun su intencion
+     * (re-normalizada para no exceder la velocidad) y resuelve la colision contra obstaculos y bordes
+     * con deslizamiento. Al final incrementa el contador de tick.
      */
     public void avanzarTick() {
         for (Jugador jugador : jugadores.values()) {
@@ -95,25 +105,8 @@ public class Partida {
         Vector2 direccion = jugador.getIntencion().getMover().conLongitudMaxima(1.0);
         Vector2 desplazamiento = direccion.escalar(params.getVelocidadJugador() * params.getDt());
         Vector2 destino = jugador.getPosicion().sumar(desplazamiento);
-        jugador.moverA(dentroDeLosBordes(destino));
+        jugador.moverA(resolutor.resolver(destino, params.getRadioJugador(), mapa));
         jugador.apuntarA(jugador.getIntencion().getApuntar());
-    }
-
-    /** Mantiene el centro del circulo a distancia >= radio de cada borde (clamp por eje). */
-    private Vector2 dentroDeLosBordes(Vector2 posicion) {
-        double minimo = params.getRadioJugador();
-        double maximo = params.getMundo() - params.getRadioJugador();
-        double x = Math.min(maximo, Math.max(minimo, posicion.getX()));
-        double y = Math.min(maximo, Math.max(minimo, posicion.getY()));
-        return new Vector2(x, y);
-    }
-
-    private Vector2 spawnDeterminista() {
-        double margen = params.getRadioJugador() * MARGEN_SPAWN_EN_RADIOS;
-        double rango = params.getMundo() - 2 * margen;
-        double x = margen + rng.nextDouble() * rango;
-        double y = margen + rng.nextDouble() * rango;
-        return new Vector2(x, y);
     }
 
     /** Vista de solo lectura de los jugadores, en orden determinista, para construir el snapshot. */

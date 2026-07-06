@@ -1,8 +1,10 @@
 package ar.pazluciano.battleroyale.juego.motor;
 
 import ar.pazluciano.battleroyale.comun.config.ConfiguracionJuego;
+import ar.pazluciano.battleroyale.juego.dominio.mapa.MapaJuego;
 import ar.pazluciano.battleroyale.juego.dominio.partida.ParametrosSimulacion;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Partida;
+import ar.pazluciano.battleroyale.juego.motor.mapa.CargadorMapas;
 import tools.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -31,8 +33,12 @@ public class GestorPartidas {
     /** Semilla fija en dev: hace la partida reproducible (mismo spawn, mismo comportamiento). */
     private static final long SEMILLA_DEV = 42L;
 
+    /** Mapa de la partida local en dev. */
+    private static final String ID_MAPA_LOCAL = "campo-01";
+
     private final ConfiguracionJuego config;
     private final ObjectMapper objectMapper;
+    private final CargadorMapas cargadorMapas;
     private final Map<String, GameLoop> loops = new ConcurrentHashMap<>();
 
     private GameLoop loopLocal;
@@ -61,7 +67,8 @@ public class GestorPartidas {
 
     private GameLoop crearPartida(long semilla) {
         String idPartida = UUID.randomUUID().toString();
-        Partida partida = new Partida(idPartida, parametrosDesdeConfig(), semilla);
+        MapaJuego mapa = cargadorMapas.mapaJuego(ID_MAPA_LOCAL);
+        Partida partida = new Partida(idPartida, mapa, parametrosDesdeConfig(), semilla);
         EmisorPartida emisor = new EmisorPartida(objectMapper);
         GameLoop loop = new GameLoop(partida, config, emisor, new EnsambladorSnapshot());
         loops.put(idPartida, loop);
@@ -71,7 +78,6 @@ public class GestorPartidas {
     private ParametrosSimulacion parametrosDesdeConfig() {
         return ParametrosSimulacion.builder()
                 .dt(config.dt())
-                .mundo(config.getMundo())
                 .radioJugador(config.getRadioJugador())
                 .velocidadJugador(config.getVelocidadJugador())
                 .vidaInicial(config.getVida())

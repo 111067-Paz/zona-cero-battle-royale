@@ -17,9 +17,6 @@ public class ParametrosSimulacion {
     /** Paso de integracion fijo, en segundos (1 / tickRate). */
     double dt;
 
-    /** Lado del mundo cuadrado, en unidades. Area jugable: {@code [0, mundo] x [0, mundo]}. */
-    int mundo;
-
     /** Radio de colision del jugador, en unidades. */
     double radioJugador;
 

@@ -55,6 +55,12 @@ class ContratoProtocoloTest {
         verificarRoundTrip("snapshot.json", Snapshot.class);
     }
 
+    @Test
+    @DisplayName("MAPA (respuesta REST) sobrevive el round-trip sin cambiar de forma")
+    void mapa_roundTrip_conservaLaForma() throws IOException {
+        verificarRoundTrip("mapa.json", MapaDto.class);
+    }
+
     private void verificarRoundTrip(String archivo, Class<?> tipo) throws IOException {
         String json = Files.readString(rutaFixture(archivo));
 

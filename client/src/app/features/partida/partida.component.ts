@@ -13,6 +13,7 @@ import { MensajeServidor, VERSION_PROTOCOLO } from '../../models/protocolo';
 import { ConexionPartidaService } from './conexion-partida.service';
 import { EntradaService } from './entrada.service';
 import { EstadoPartidaStore } from './estado-partida.store';
+import { MapaService } from './mapa.service';
 import { RendererJuego } from './render/renderer-juego';
 import { RendererTopDown2D } from './render/renderer-top-down-2d';
 
@@ -88,6 +89,7 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
   private readonly conexion = inject(ConexionPartidaService);
   private readonly entrada = inject(EntradaService);
   private readonly store = inject(EstadoPartidaStore);
+  private readonly mapaService = inject(MapaService);
 
   private readonly lienzo = viewChild.required<ElementRef<HTMLCanvasElement>>('lienzo');
   private readonly renderer: RendererJuego = new RendererTopDown2D();
@@ -136,11 +138,18 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
     switch (mensaje.tipo) {
       case 'BIENVENIDA':
         this.store.aplicarBienvenida(mensaje);
+        this.cargarMapa(mensaje.idMapa);
         break;
       case 'SNAPSHOT':
         this.store.aplicarSnapshot(mensaje);
         break;
     }
+  }
+
+  private cargarMapa(idMapa: string): void {
+    this.suscripciones.push(
+      this.mapaService.obtener(idMapa).subscribe((mapa) => this.renderer.establecerMapa(mapa)),
+    );
   }
 
   private readonly bucleRender = (): void => {
