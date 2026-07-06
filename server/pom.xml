@@ -54,6 +54,12 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-websocket</artifactId>
 		</dependency>
+		<!-- Boot 4 no arrastra Jackson desde el starter web (Boot 3 si lo hacia).
+		     Lo necesitamos para (de)serializar el protocolo JSON del WebSocket. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-json</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

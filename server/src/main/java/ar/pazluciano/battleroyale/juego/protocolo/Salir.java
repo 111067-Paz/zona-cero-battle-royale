@@ -15,5 +15,5 @@ import lombok.ToString;
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-public class Salir extends MensajeCliente {
+public final class Salir extends MensajeCliente {
 }

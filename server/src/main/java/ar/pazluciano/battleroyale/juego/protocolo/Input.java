@@ -23,7 +23,7 @@ import java.util.List;
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-public class Input extends MensajeCliente {
+public final class Input extends MensajeCliente {
 
     /** Secuencia monotonica por conexion (arranca en 1). {@code sec <= ultimaSec} -> descarte. */
     private long sec;

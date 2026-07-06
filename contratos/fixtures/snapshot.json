@@ -1,0 +1,21 @@
+{
+  "v": 1,
+  "tipo": "SNAPSHOT",
+  "tick": 1234,
+  "estado": "EN_CURSO",
+  "tickInicio": 90,
+  "acks": {
+    "j-1": 812
+  },
+  "jugadores": [
+    {
+      "id": "j-1",
+      "x": 12.5,
+      "y": 40.2,
+      "angulo": 1.57,
+      "hp": 100,
+      "estadoVida": "VIVO",
+      "conectado": true
+    }
+  ]
+}

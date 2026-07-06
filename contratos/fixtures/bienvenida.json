@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "tipo": "BIENVENIDA",
+  "idJugador": "j-1",
+  "idPartida": "p-1",
+  "config": {
+    "tickRate": 30,
+    "snapshotRate": 15,
+    "mundo": 256,
+    "velocidad": 5.0
+  },
+  "idMapa": "campo-01"
+}

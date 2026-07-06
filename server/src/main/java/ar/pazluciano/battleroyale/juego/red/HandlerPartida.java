@@ -1,0 +1,141 @@
+package ar.pazluciano.battleroyale.juego.red;
+
+import ar.pazluciano.battleroyale.juego.motor.ComandoDesconexion;
+import ar.pazluciano.battleroyale.juego.motor.ComandoInput;
+import ar.pazluciano.battleroyale.juego.motor.ComandoSalir;
+import ar.pazluciano.battleroyale.juego.motor.ComandoUnirse;
+import ar.pazluciano.battleroyale.juego.motor.GestorPartidas;
+import ar.pazluciano.battleroyale.juego.protocolo.Input;
+import ar.pazluciano.battleroyale.juego.protocolo.MensajeCliente;
+import ar.pazluciano.battleroyale.juego.protocolo.Salir;
+import ar.pazluciano.battleroyale.juego.protocolo.Unirse;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Handler crudo del WebSocket de juego (PLAN §7-C). Corre en el pool del contenedor y tiene UNA sola
+ * responsabilidad: parsear, validar la FORMA del mensaje y ENCOLAR un comando en el loop de la
+ * partida. JAMAS muta estado de juego ni llama al dominio.
+ *
+ * <p>Defensas de §5.3 activas en la Fase 0: version de protocolo, y strikes por JSON malformado o
+ * tipo desconocido (3 -> cierre). El rate limit por conexion y el timeout de heartbeat server-side
+ * se agregan en fases de multijugador, cuando el cliente es realmente remoto.
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class HandlerPartida extends TextWebSocketHandler {
+
+    private static final int VERSION_PROTOCOLO = 1;
+    private static final int MAX_STRIKES = 3;
+
+    /** Limites del decorator (R5): 5 s de tiempo de envio, 512 KB de buffer por sesion. */
+    private static final int LIMITE_ENVIO_MS = 5_000;
+    private static final int LIMITE_BUFFER_BYTES = 512 * 1024;
+
+    private final GestorPartidas gestorPartidas;
+    private final ObjectMapper objectMapper;
+
+    /** Sesiones ya unidas, indexadas por id de sesion WS. */
+    private final Map<String, SesionWebSocket> jugadores = new ConcurrentHashMap<>();
+
+    /** Contador de strikes por sesion cruda (aun sin unirse). */
+    private final Map<String, Integer> strikes = new ConcurrentHashMap<>();
+
+    @Override
+    public void afterConnectionEstablished(WebSocketSession session) {
+        strikes.put(session.getId(), 0);
+    }
+
+    @Override
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) {
+        MensajeCliente mensaje = parsear(session, message);
+        if (mensaje == null) {
+            return;
+        }
+        if (mensaje.getV() != VERSION_PROTOCOLO) {
+            cerrar(session, CloseStatus.NOT_ACCEPTABLE.withReason("version de protocolo no soportada"));
+            return;
+        }
+        switch (mensaje) {
+            case Unirse unirse -> manejarUnirse(session, unirse);
+            case Input input -> manejarInput(session, input);
+            case Salir salir -> manejarSalir(session);
+        }
+    }
+
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        strikes.remove(session.getId());
+        SesionWebSocket sesion = jugadores.remove(session.getId());
+        if (sesion != null) {
+            gestorPartidas.partidaLocal().encolar(new ComandoDesconexion(sesion.idJugador()));
+        }
+    }
+
+    private MensajeCliente parsear(WebSocketSession session, TextMessage message) {
+        try {
+            return objectMapper.readValue(message.getPayload(), MensajeCliente.class);
+        } catch (JacksonException e) {
+            registrarStrike(session);
+            return null;
+        }
+    }
+
+    private void manejarUnirse(WebSocketSession session, Unirse unirse) {
+        if (jugadores.containsKey(session.getId())) {
+            return;
+        }
+        String idJugador = UUID.randomUUID().toString();
+        WebSocketSession decorada =
+                new ConcurrentWebSocketSessionDecorator(session, LIMITE_ENVIO_MS, LIMITE_BUFFER_BYTES);
+        SesionWebSocket sesion = new SesionWebSocket(idJugador, decorada);
+        jugadores.put(session.getId(), sesion);
+        gestorPartidas.partidaLocal().encolar(new ComandoUnirse(sesion));
+    }
+
+    private void manejarInput(WebSocketSession session, Input input) {
+        SesionWebSocket sesion = jugadores.get(session.getId());
+        if (sesion == null) {
+            return;
+        }
+        gestorPartidas.partidaLocal().encolar(new ComandoInput(sesion.idJugador(), input));
+    }
+
+    private void manejarSalir(WebSocketSession session) {
+        SesionWebSocket sesion = jugadores.get(session.getId());
+        if (sesion == null) {
+            return;
+        }
+        gestorPartidas.partidaLocal().encolar(new ComandoSalir(sesion.idJugador()));
+    }
+
+    private void registrarStrike(WebSocketSession session) {
+        int total = strikes.merge(session.getId(), 1, Integer::sum);
+        if (total >= MAX_STRIKES) {
+            cerrar(session, CloseStatus.NOT_ACCEPTABLE.withReason("demasiados mensajes invalidos"));
+        }
+    }
+
+    private void cerrar(WebSocketSession session, CloseStatus status) {
+        try {
+            session.close(status);
+        } catch (IOException e) {
+            log.warn("No se pudo cerrar la sesion {}: {}", session.getId(), e.getMessage());
+        }
+    }
+}

@@ -1,1 +1,24 @@
-/* You can add global styles to this file, and also import other style files */
+@import "tailwindcss";
+
+/*
+ * Tokens del sistema de diseno "Battle Bash" (PLAN §15.1). Se declaran desde la Fase 0 para que
+ * cada componente del HUD nazca con el estilo definitivo: contornos negros gruesos, colores
+ * saturados, relieve. El estilo NO es una fase final de polish, es parte de cada componente.
+ */
+:root {
+  --color-bg-lobby: #0f1a36;
+  --color-bg-map: #82c341;
+  --color-thick-border: #111424;
+  --grad-play-button: linear-gradient(180deg, #ffcc00, #ff6600);
+  --color-health-lime: #4ade80;
+  --color-radar-blue: #2563eb;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--color-bg-lobby);
+  color: #eaf0ff;
+  font-family: 'Nunito', system-ui, sans-serif;
+}

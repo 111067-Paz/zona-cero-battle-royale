@@ -25,7 +25,7 @@ import lombok.Setter;
         @JsonSubTypes.Type(value = Input.class, name = "INPUT"),
         @JsonSubTypes.Type(value = Salir.class, name = "SALIR")
 })
-public abstract class MensajeCliente {
+public abstract sealed class MensajeCliente permits Unirse, Input, Salir {
 
     /** Version del protocolo. En v1 siempre vale 1. */
     private int v;

@@ -17,7 +17,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-public class Unirse extends MensajeCliente {
+public final class Unirse extends MensajeCliente {
 
     /** Ticket opaco de un solo uso. Nulo en las Fases 0-4. */
     private String ticket;
