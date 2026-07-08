@@ -425,6 +425,23 @@ public class Partida implements VistaMundo {
         return !colisionSegmento.primerImpacto(desde, hasta, mapa.getObstaculos(), List.of(), 0.0).huboImpacto();
     }
 
+    /** VistaMundo: la zona existe recien desde que arranca EN_CURSO ({@link #iniciarEnCurso()}). */
+    @Override
+    public boolean hayZonaActiva() {
+        return zona != null;
+    }
+
+    /** VistaMundo: sin zona activa, todo es "seguro" (los bots no huyen de nada que no existe). */
+    @Override
+    public boolean estaDentroDeZona(Vector2 punto) {
+        return zona == null || zona.contiene(punto);
+    }
+
+    @Override
+    public Vector2 centroZona() {
+        return zona.getCentro();
+    }
+
     /**
      * Queda 1 vivo -> gana. Queda 0 vivos -> empate por: 1) mayor HP al inicio del tick, 2) mas kills,
      * 3) orden de union mas bajo (§8.3). Con 1 solo participante no hay "batalla" que resolver.

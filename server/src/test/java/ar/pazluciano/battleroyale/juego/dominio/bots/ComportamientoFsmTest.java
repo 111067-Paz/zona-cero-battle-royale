@@ -71,6 +71,40 @@ class ComportamientoFsmTest {
     }
 
     @Test
+    @DisplayName("fuera de zona, camina hacia el centro y NO dispara aunque haya un rival visible (§8.3)")
+    void pensar_fueraDeZonaConRivalVisible_priorizaHuirYNoDispara() {
+        Jugador bot = botEn(50.0, 0.0); // lejos del centro de zona (0,0), radio 10 -> esta afuera
+        Jugador rival = new Jugador("r", 1, new Vector2(51.0, 0.0), 100); // pegado, en rango de ataque
+        Comportamiento comportamiento = comportamientoMedio();
+        MundoFalso mundo = new MundoFalso(List.of(rival), true, new Vector2(0.0, 0.0), 10.0);
+        Random rng = new Random(1);
+
+        for (int i = 0; i < 5; i++) {
+            comportamiento.pensar(bot, mundo, rng);
+        }
+
+        assertFalse(bot.getIntencion().isDisparar());
+        assertTrue(bot.getIntencion().getMover().getX() < 0); // se mueve hacia -x, hacia el centro
+    }
+
+    @Test
+    @DisplayName("al volver a la zona, retoma el comportamiento normal (merodea de nuevo)")
+    void pensar_vuelveALaZona_retomaMerodeo() {
+        Jugador bot = botEn(50.0, 0.0);
+        Comportamiento comportamiento = comportamientoMedio();
+        Random rng = new Random(1);
+
+        MundoFalso fuera = new MundoFalso(List.of(), true, new Vector2(0.0, 0.0), 10.0);
+        comportamiento.pensar(bot, fuera, rng); // arranca BuscarZona (esta a 50u de un centro de radio 10)
+
+        MundoFalso dentro = new MundoFalso(List.of(), true, new Vector2(0.0, 0.0), 1000.0);
+        comportamiento.pensar(bot, dentro, rng); // "dentro" ahora -> BuscarZona.actuar() decide volver a Merodear
+        comportamiento.pensar(bot, dentro, rng); // este tick YA corre Merodeando.actuar() (transicion del anterior)
+
+        assertTrue(bot.getIntencion().getMover().longitud() > 0.5); // esta merodeando de nuevo, no frenado
+    }
+
+    @Test
     @DisplayName("mismo seed produce el mismo merodeo (determinismo)")
     void pensar_mismaSemilla_mismoMerodeo() {
         Jugador botA = botEn(50.0, 50.0);

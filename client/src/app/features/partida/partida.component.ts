@@ -14,6 +14,7 @@ import { EntradaService } from './entrada.service';
 import { EstadoPartidaStore } from './estado-partida.store';
 import { HudComponent } from './hud.component';
 import { MapaService } from './mapa.service';
+import { OverlayEstadoComponent } from './overlay-estado.component';
 import { RendererJuego } from './render/renderer-juego';
 import { RendererTopDown2D } from './render/renderer-top-down-2d';
 
@@ -29,12 +30,13 @@ import { RendererTopDown2D } from './render/renderer-top-down-2d';
 @Component({
   selector: 'app-partida',
   standalone: true,
-  imports: [HudComponent],
+  imports: [HudComponent, OverlayEstadoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="contenedor">
       <canvas #lienzo class="lienzo"></canvas>
       <app-hud />
+      <app-overlay-estado />
       <div class="pie">
         <span class="estado" [class.estado--ok]="estadoConexion() === 'conectado'">
           {{ estadoConexion() }}

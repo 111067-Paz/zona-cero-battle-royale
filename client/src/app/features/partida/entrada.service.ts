@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Input, VERSION_PROTOCOLO } from '../../models/protocolo';
+import { AccionJugador, Input, VERSION_PROTOCOLO } from '../../models/protocolo';
 
 /**
  * Traduce teclado y mouse a INTENCION abstracta (PLAN §7-C). No conoce el WebSocket: compone un
@@ -18,12 +18,24 @@ export class EntradaService {
   private mouseY = 0;
   private disparando = false;
   private sec = 0;
+  private accionesPendientes: AccionJugador[] = [];
 
   private canvas: HTMLCanvasElement | null = null;
   private emisor: ((input: Input) => void) | null = null;
   private intervalo: ReturnType<typeof setInterval> | null = null;
 
-  private readonly alPresionar = (e: KeyboardEvent) => this.teclas.add(e.key.toLowerCase());
+  private readonly alPresionar = (e: KeyboardEvent) => {
+    const tecla = e.key.toLowerCase();
+    this.teclas.add(tecla);
+    if (e.repeat) {
+      return; // acciones one-shot: solo en el flanco de bajada, no mientras se mantiene apretada
+    }
+    if (tecla === 'e') {
+      this.accionesPendientes.push('RECOGER');
+    } else if (tecla === 'q') {
+      this.accionesPendientes.push('USAR_BOTIQUIN');
+    }
+  };
   private readonly alSoltar = (e: KeyboardEvent) => this.teclas.delete(e.key.toLowerCase());
   private readonly alMover = (e: MouseEvent) => {
     this.mouseX = e.clientX;
@@ -72,6 +84,11 @@ export class EntradaService {
     this.sec = 0;
   }
 
+  /** Encola USAR_BOTIQUIN (para el click del quick-slot del HUD, ademas de la tecla Q). */
+  usarBotiquin(): void {
+    this.accionesPendientes.push('USAR_BOTIQUIN');
+  }
+
   private muestrear(): void {
     if (this.emisor === null) {
       return;
@@ -81,6 +98,8 @@ export class EntradaService {
   }
 
   private componerInput(): Input {
+    const acciones = this.accionesPendientes;
+    this.accionesPendientes = [];
     return {
       v: VERSION_PROTOCOLO,
       tipo: 'INPUT',
@@ -88,7 +107,7 @@ export class EntradaService {
       mover: this.vectorMovimiento(),
       apuntar: this.anguloApuntado(),
       disparar: this.disparando,
-      acciones: [],
+      acciones,
     };
   }
 
@@ -123,5 +142,6 @@ export class EntradaService {
   private limpiar(): void {
     this.teclas.clear();
     this.disparando = false;
+    this.accionesPendientes = [];
   }
 }

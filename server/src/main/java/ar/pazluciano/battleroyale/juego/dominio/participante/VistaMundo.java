@@ -17,4 +17,13 @@ public interface VistaMundo {
 
     /** Indica si el segmento entre dos puntos NO esta bloqueado por un obstaculo (raycast). */
     boolean hayLineaDeVista(Vector2 desde, Vector2 hasta);
+
+    /** Si ya hay zona segura activa (recien la crea el inicio de EN_CURSO). */
+    boolean hayZonaActiva();
+
+    /** Si el punto esta dentro de la zona segura. Sin zona activa, todo se considera seguro. */
+    boolean estaDentroDeZona(Vector2 punto);
+
+    /** Centro de la zona segura actual. Solo valido si {@link #hayZonaActiva()}. */
+    Vector2 centroZona();
 }

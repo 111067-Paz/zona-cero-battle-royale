@@ -3,7 +3,9 @@ import { Evento, JugadorSnapshot, ProyectilSnapshot, Snapshot } from '../../mode
 import { EstadoPartidaStore } from './estado-partida.store';
 
 function jugador(id: string, x: number, y: number, angulo = 0, hp = 100): JugadorSnapshot {
-  return { id, x, y, angulo, hp, estadoVida: 'VIVO', conectado: true, arma: 'PISTOLA', kills: 0 };
+  return {
+    id, x, y, angulo, hp, estadoVida: 'VIVO', conectado: true, arma: 'PISTOLA', kills: 0, botiquines: 0,
+  };
 }
 
 function snapshot(
@@ -11,7 +13,10 @@ function snapshot(
   jugadores: JugadorSnapshot[],
   proyectiles: ProyectilSnapshot[] = [],
 ): Snapshot {
-  return { v: 1, tipo: 'SNAPSHOT', tick, estado: 'EN_CURSO', tickInicio: 0, acks: {}, jugadores, proyectiles };
+  return {
+    v: 1, tipo: 'SNAPSHOT', tick, estado: 'EN_CURSO', tickInicio: 0, ticksParaInicio: null, acks: {},
+    jugadores, proyectiles, zona: null, botines: [],
+  };
 }
 
 describe('EstadoPartidaStore', () => {

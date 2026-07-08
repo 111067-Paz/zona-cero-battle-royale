@@ -13,6 +13,7 @@ public class RepertorioEstados {
     private final EstadoComportamiento merodeando = new Merodeando();
     private final EstadoComportamiento persiguiendo = new Persiguiendo();
     private final EstadoComportamiento atacando = new Atacando();
+    private final EstadoComportamiento buscandoZona = new BuscarZona();
 
     public EstadoComportamiento merodeando() {
         return merodeando;
@@ -24,5 +25,9 @@ public class RepertorioEstados {
 
     public EstadoComportamiento atacando() {
         return atacando;
+    }
+
+    public EstadoComportamiento buscandoZona() {
+        return buscandoZona;
     }
 }

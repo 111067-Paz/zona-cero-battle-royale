@@ -1,6 +1,6 @@
 import { Application, Graphics, Text } from 'pixi.js';
 import { DecoracionMapa, Mapa, RectanguloMapa } from '../../../models/mapa';
-import { EstadoVisual, JugadorVisual, NumeroDanio, ProyectilVisual } from '../estado-visual';
+import { BotinVisual, EstadoVisual, JugadorVisual, NumeroDanio, ProyectilVisual, ZonaVisual } from '../estado-visual';
 import { RendererJuego } from './renderer-juego';
 
 /**
@@ -31,6 +31,10 @@ export class RendererTopDown2D implements RendererJuego {
   private static readonly COLOR_OTRO = 0xff6b9d;
   private static readonly COLOR_MUERTO = 0x8a8f9c;
   private static readonly COLOR_PROYECTIL = 0xffee44;
+  private static readonly COLOR_ZONA_ACTUAL = 0x4ade80;
+  private static readonly COLOR_ZONA_PROXIMA = 0xffcc00;
+  private static readonly COLOR_BOTIQUIN = 0x4ade80;
+  private static readonly COLOR_ARMA_BOTIN = 0xffcc00;
 
   private app: Application | null = null;
   private mapa: Mapa | null = null;
@@ -67,6 +71,12 @@ export class RendererTopDown2D implements RendererJuego {
 
     this.graficos.clear();
     this.dibujarMapa(camara, centroX, centroY, anchoPantalla, altoPantalla);
+    if (estado.zona !== null) {
+      this.dibujarZona(estado.zona, camara, centroX, centroY);
+    }
+    for (const botin of estado.botines) {
+      this.dibujarBotin(botin, camara, centroX, centroY, anchoPantalla, altoPantalla);
+    }
     for (const jugador of estado.jugadores) {
       const x = (jugador.x - camara.x) * RendererTopDown2D.ESCALA + centroX;
       const y = (jugador.y - camara.y) * RendererTopDown2D.ESCALA + centroY;
@@ -197,6 +207,40 @@ export class RendererTopDown2D implements RendererJuego {
     if (fraccion > 0) {
       this.graficos.rect(bx, by, ancho * fraccion, alto).fill(this.colorHp(fraccion));
     }
+  }
+
+  /** Anillo de la zona actual (solido) y de la proxima contraccion (mas fino, aviso) — mismo centro. */
+  private dibujarZona(zona: ZonaVisual, camara: { x: number; y: number }, centroX: number, centroY: number): void {
+    const escala = RendererTopDown2D.ESCALA;
+    const cx = (zona.cx - camara.x) * escala + centroX;
+    const cy = (zona.cy - camara.y) * escala + centroY;
+    this.graficos
+      .circle(cx, cy, zona.radioProximo * escala)
+      .stroke({ width: 2, color: RendererTopDown2D.COLOR_ZONA_PROXIMA, alpha: 0.6 });
+    this.graficos
+      .circle(cx, cy, zona.radio * escala)
+      .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_ZONA_ACTUAL });
+  }
+
+  private dibujarBotin(
+    botin: BotinVisual,
+    camara: { x: number; y: number },
+    centroX: number,
+    centroY: number,
+    anchoPantalla: number,
+    altoPantalla: number,
+  ): void {
+    const escala = RendererTopDown2D.ESCALA;
+    const x = (botin.x - camara.x) * escala + centroX;
+    const y = (botin.y - camara.y) * escala + centroY;
+    if (!this.enPantalla(x - 8, y - 8, 16, 16, anchoPantalla, altoPantalla)) {
+      return;
+    }
+    const color = botin.tipo === 'BOTIQUIN' ? RendererTopDown2D.COLOR_BOTIQUIN : RendererTopDown2D.COLOR_ARMA_BOTIN;
+    this.graficos
+      .circle(x, y, 8)
+      .fill(color)
+      .stroke({ width: 2, color: RendererTopDown2D.COLOR_BORDE });
   }
 
   private dibujarProyectil(

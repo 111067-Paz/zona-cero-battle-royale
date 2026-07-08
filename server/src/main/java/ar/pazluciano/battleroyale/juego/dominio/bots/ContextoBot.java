@@ -48,4 +48,14 @@ public class ContextoBot {
     public Vector2 direccionHacia(Jugador objetivo) {
         return objetivo.getPosicion().sumar(jugador.getPosicion().escalar(-1.0)).normalizado();
     }
+
+    /** El bot esta fuera de la zona segura (con zona ya activa). Prioridad sobre combate/merodeo (§8.3). */
+    public boolean estaFueraDeZona() {
+        return mundo.hayZonaActiva() && !mundo.estaDentroDeZona(jugador.getPosicion());
+    }
+
+    /** Direccion hacia el centro de la zona segura. Solo valido si {@link #estaFueraDeZona()}. */
+    public Vector2 direccionHaciaZona() {
+        return mundo.centroZona().sumar(jugador.getPosicion().escalar(-1.0)).normalizado();
+    }
 }

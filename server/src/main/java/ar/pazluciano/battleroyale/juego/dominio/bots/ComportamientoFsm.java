@@ -32,6 +32,11 @@ public class ComportamientoFsm implements Comportamiento {
     @Override
     public void pensar(Jugador jugador, VistaMundo mundo, Random rng) {
         ContextoBot contexto = new ContextoBot(jugador, mundo, memoria, rng, dificultad, percepcion);
+        // Prioridad absoluta (§8.3): fuera de zona, interrumpe Perseguir/Atacar y huye. Si BuscarZona
+        // ya esta activo lo deja decidir a el (puede volver a Merodear si ya esta adentro de nuevo).
+        if (contexto.estaFueraDeZona() && !(estadoActual instanceof BuscarZona)) {
+            estadoActual = repertorio.buscandoZona();
+        }
         estadoActual = estadoActual.actuar(contexto, repertorio);
     }
 }

@@ -7,7 +7,14 @@ import {
   ProyectilSnapshot,
   Snapshot,
 } from '../../models/protocolo';
-import { EstadoVisual, JugadorVisual, LineaKill, NumeroDanio, ProyectilVisual } from './estado-visual';
+import {
+  EstadoVisual,
+  JugadorVisual,
+  LineaKill,
+  NumeroDanio,
+  ProyectilVisual,
+  ResultadoPartida,
+} from './estado-visual';
 
 interface SnapshotFechado {
   recibidoEn: number;
@@ -46,6 +53,9 @@ export class EstadoPartidaStore {
 
   /** Kill feed (mas reciente primero, tope MAX_KILL_FEED). Se actualiza por EVENTO, no por frame. */
   readonly killFeed = signal<LineaKill[]>([]);
+
+  /** Podio, seteado UNA vez por el EVENTO FIN_PARTIDA (§7-F). */
+  readonly resultadoFinal = signal<ResultadoPartida | null>(null);
 
   /** El jugador propio en el ultimo snapshot (HP, arma, kills del HUD). */
   readonly jugadorPropio = computed<JugadorSnapshot | null>(() => {
@@ -88,6 +98,10 @@ export class EstadoPartidaStore {
   }
 
   aplicarEvento(evento: Evento): void {
+    if (evento.evento === 'FIN_PARTIDA') {
+      this.aplicarFinPartida(evento.datos);
+      return;
+    }
     if (evento.evento !== 'KILL') {
       return;
     }
@@ -100,12 +114,24 @@ export class EstadoPartidaStore {
     this.killFeed.update((actual) => [linea, ...actual].slice(0, EstadoPartidaStore.MAX_KILL_FEED));
   }
 
+  private aplicarFinPartida(datos: Record<string, string>): void {
+    const killsPorJugador: Record<string, number> = {};
+    const prefijo = 'kills_';
+    for (const [clave, valor] of Object.entries(datos)) {
+      if (clave.startsWith(prefijo)) {
+        killsPorJugador[clave.slice(prefijo.length)] = Number(valor);
+      }
+    }
+    this.resultadoFinal.set({ ganador: datos['ganador'] ?? '', killsPorJugador });
+  }
+
   reiniciar(): void {
     this.buffer = [];
     this.ultimoTick = -1;
     this.numerosDanio = [];
     this.ultimoSnapshot.set(null);
     this.killFeed.set([]);
+    this.resultadoFinal.set(null);
   }
 
   estadoVisual(ahora: number): EstadoVisual | null {
@@ -170,6 +196,8 @@ export class EstadoPartidaStore {
       jugadores,
       proyectiles: this.interpolarProyectiles(anterior.proyectiles, siguiente.proyectiles, t),
       numerosDanio: this.numerosDanio,
+      zona: this.aZonaVisual(siguiente),
+      botines: this.aBotinesVisual(siguiente),
     };
   }
 
@@ -227,7 +255,26 @@ export class EstadoPartidaStore {
         angulo: proyectil.angulo,
       })),
       numerosDanio: this.numerosDanio,
+      zona: this.aZonaVisual(snapshot),
+      botines: this.aBotinesVisual(snapshot),
     };
+  }
+
+  /** Zona y botin no se interpolan: cambian lento y el snapshot mas nuevo alcanza (sin jitter visible). */
+  private aZonaVisual(snapshot: Snapshot): EstadoVisual['zona'] {
+    if (snapshot.zona === null) {
+      return null;
+    }
+    return {
+      cx: snapshot.zona.cx,
+      cy: snapshot.zona.cy,
+      radio: snapshot.zona.radio,
+      radioProximo: snapshot.zona.radioProximo,
+    };
+  }
+
+  private aBotinesVisual(snapshot: Snapshot): EstadoVisual['botines'] {
+    return snapshot.botines.map((botin) => ({ id: botin.id, tipo: botin.tipo, x: botin.x, y: botin.y }));
   }
 
   private visualDe(jugador: JugadorSnapshot): JugadorVisual {

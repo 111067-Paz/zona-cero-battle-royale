@@ -73,6 +73,8 @@ export interface JugadorSnapshot {
   conectado: boolean;
   arma: TipoArma;
   kills: number;
+  /** Botiquines en inventario (0-3, R28), para el quick-slot del HUD. */
+  botiquines: number;
 }
 
 export interface ProyectilSnapshot {
@@ -83,6 +85,25 @@ export interface ProyectilSnapshot {
   angulo: number;
 }
 
+export interface ZonaSnapshot {
+  cx: number;
+  cy: number;
+  radio: number;
+  fase: number;
+  /** Radio al que se dirige la contraccion en curso, o la proxima si esta en espera. */
+  radioProximo: number;
+  /** Ticks restantes de la fase actual (contraccion o espera), para "GAS CLOSING". */
+  ticksParaProximoCambio: number;
+}
+
+export interface BotinSnapshot {
+  id: number;
+  /** BOTIQUIN | PISTOLA | ESCOPETA | RIFLE */
+  tipo: string;
+  x: number;
+  y: number;
+}
+
 export interface Snapshot {
   v: Version;
   tipo: 'SNAPSHOT';
@@ -90,10 +111,15 @@ export interface Snapshot {
   estado: EstadoPartida;
   /** Tick en que la partida entro en EN_CURSO; base para calcular el TIME del HUD (R27). */
   tickInicio: number;
+  /** Ticks que faltan para EN_CURSO; solo presente durante CUENTA_REGRESIVA (R27). */
+  ticksParaInicio: number | null;
   /** Ultima `sec` procesada por jugador (habilita la prediccion de la Fase 7). */
   acks: Record<string, number>;
   jugadores: JugadorSnapshot[];
   proyectiles: ProyectilSnapshot[];
+  /** Null hasta que la partida entra EN_CURSO. */
+  zona: ZonaSnapshot | null;
+  botines: BotinSnapshot[];
 }
 
 export interface Evento {

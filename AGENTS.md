@@ -127,11 +127,13 @@ Al terminar trabajo significativo: `mem_save` con lo aprendido (obligatorio, no 
   **State** (FSM Merodear/Perseguir/Atacar con histéresis + RepertorioEstados), **Strategy**
   (Comportamiento). Humanos y bots se crean por el MISMO camino (agregarParticipante). Bots-locales
   configurable (no hardcodeado).
-- [ ] **Fase 4 — Battle royale completo (local)**
-  DoD: partida completa contra 9 bots de lobby a ganador, con HUD Battle Bash (radar solo
-  zona+yo R30, GAS CLOSING, TIME desde tickInicio R27, quick-slot botiquín×n R28) y pantallas
-  por `snapshot.estado`. Zona con acumulador fraccional; desempates deterministas; heartbeat
-  en TODOS los estados (R24: un lobby de 30 s no desconecta a nadie).
+- [x] **Fase 4 — Battle royale completo (local)** *(cerrada 2026-07-08)*
+  DoD validado: partida completa contra 9 bots de lobby a ganador, HUD Battle Bash (radar,
+  GAS CLOSING, TIME, quick-slot botiquín) y pantallas por `snapshot.estado`. State completo
+  (EnLobby→CuentaRegresiva→EnCurso→Finalizada), ZonaSegura con acumulador exacto, botín
+  (Factory Method) y desempates deterministas. Corrección post-cierre: bots ahora priorizan
+  `BuscarZona` con prioridad absoluta (interrumpe combate) — cerraba un gap del propio plan
+  §8.3 que en F3 había quedado diferido por no existir la zona todavía.
 - [ ] **Fase 5 — Plataforma (cuentas, JWT, persistencia)**
   DoD: me registro, juego contra bots, mis estadísticas (con `muertes` y `top3`, R38) sobreviven
   un reinicio y se ven en `/lobby`; endpoints protegidos → 401/403. Ticket de un solo uso para

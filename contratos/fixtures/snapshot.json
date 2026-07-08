@@ -4,6 +4,7 @@
   "tick": 1234,
   "estado": "EN_CURSO",
   "tickInicio": 90,
+  "ticksParaInicio": null,
   "acks": {
     "j-1": 812
   },
@@ -17,7 +18,8 @@
       "estadoVida": "VIVO",
       "conectado": true,
       "arma": "PISTOLA",
-      "kills": 2
+      "kills": 2,
+      "botiquines": 1
     }
   ],
   "proyectiles": [
@@ -27,5 +29,16 @@
       "y": 39.0,
       "angulo": 1.57
     }
+  ],
+  "zona": {
+    "cx": 128.0,
+    "cy": 128.0,
+    "radio": 90.0,
+    "fase": 2,
+    "radioProximo": 55.0,
+    "ticksParaProximoCambio": 300
+  },
+  "botines": [
+    { "id": 3, "tipo": "BOTIQUIN", "x": 100.0, "y": 30.0 }
   ]
 }

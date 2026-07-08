@@ -21,6 +21,20 @@ export interface ProyectilVisual {
   angulo: number;
 }
 
+export interface ZonaVisual {
+  cx: number;
+  cy: number;
+  radio: number;
+  radioProximo: number;
+}
+
+export interface BotinVisual {
+  id: number;
+  tipo: string;
+  x: number;
+  y: number;
+}
+
 /** Numero de dano flotante, derivado del diff de HP entre snapshots (R29). Lo anima el renderer. */
 export interface NumeroDanio {
   x: number;
@@ -35,6 +49,8 @@ export interface EstadoVisual {
   jugadores: JugadorVisual[];
   proyectiles: ProyectilVisual[];
   numerosDanio: NumeroDanio[];
+  zona: ZonaVisual | null;
+  botines: BotinVisual[];
 }
 
 /** Linea del kill feed, derivada de un EVENTO KILL. */
@@ -43,4 +59,10 @@ export interface LineaKill {
   victima: string;
   arma: string;
   creadoEn: number;
+}
+
+/** Podio, derivado del EVENTO FIN_PARTIDA (§7-F). */
+export interface ResultadoPartida {
+  ganador: string;
+  killsPorJugador: Record<string, number>;
 }
