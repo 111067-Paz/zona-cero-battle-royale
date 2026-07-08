@@ -19,16 +19,23 @@ import java.io.IOException;
 public class SesionWebSocket implements ConexionJugador {
 
     private final String idJugador;
+    private final String idPartida;
     private final WebSocketSession sesionDecorada;
 
-    public SesionWebSocket(String idJugador, WebSocketSession sesionDecorada) {
+    public SesionWebSocket(String idJugador, String idPartida, WebSocketSession sesionDecorada) {
         this.idJugador = idJugador;
+        this.idPartida = idPartida;
         this.sesionDecorada = sesionDecorada;
     }
 
     @Override
     public String idJugador() {
         return idJugador;
+    }
+
+    /** A que partida pertenece esta sesion (F6, multi-partida): resuelve el loop en el handler. */
+    public String idPartida() {
+        return idPartida;
     }
 
     @Override

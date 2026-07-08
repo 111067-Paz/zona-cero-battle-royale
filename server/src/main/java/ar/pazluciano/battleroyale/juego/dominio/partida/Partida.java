@@ -87,6 +87,10 @@ public class Partida implements VistaMundo {
     @Getter(AccessLevel.NONE)
     private final List<EventoDominio> eventosPendientes = new ArrayList<>();
 
+    /** Orden de muerte, primero el que murio primero. Base de TOP3/posicionFinal (F5, R38). */
+    @Getter(AccessLevel.NONE)
+    private final List<String> ordenEliminacion = new ArrayList<>();
+
     /** HP de cada jugador al INICIO del tick jugable: primer criterio de desempate (§8.3). */
     @Getter(AccessLevel.NONE)
     private final Map<String, Integer> hpAlInicioTick = new LinkedHashMap<>();
@@ -300,6 +304,7 @@ public class Partida implements VistaMundo {
         if (estabaVivo && !victima.estaVivo()) {
             buscarJugador(proyectil.getIdDueno()).ifPresent(Jugador::sumarKill);
             eventosPendientes.add(new EventoKill(proyectil.getIdDueno(), victima.getId(), proyectil.getArma()));
+            ordenEliminacion.add(victima.getId());
         }
     }
 
@@ -347,6 +352,7 @@ public class Partida implements VistaMundo {
             jugador.aplicarDanioZonaFraccional(parametrosZona.getDanioPorSegundo(), params.getDt());
             if (!jugador.estaVivo()) {
                 eventosPendientes.add(new EventoMuerteZona(jugador.getId()));
+                ordenEliminacion.add(jugador.getId());
             }
         }
     }
@@ -503,6 +509,11 @@ public class Partida implements VistaMundo {
         List<EventoDominio> copia = new ArrayList<>(eventosPendientes);
         eventosPendientes.clear();
         return copia;
+    }
+
+    /** Orden de muerte (primero el que murio primero). Base de TOP3/posicionFinal (F5, R38). */
+    public List<String> ordenEliminacion() {
+        return List.copyOf(ordenEliminacion);
     }
 
     /** Mapa id -> ultima sec procesada, para el campo {@code acks} del snapshot (habilita la F7). */

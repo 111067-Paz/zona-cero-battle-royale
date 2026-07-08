@@ -6,6 +6,7 @@ import ar.pazluciano.battleroyale.juego.dominio.partida.EventoFinPartida;
 import ar.pazluciano.battleroyale.juego.dominio.partida.EventoKill;
 import ar.pazluciano.battleroyale.juego.dominio.partida.EventoMuerteZona;
 import ar.pazluciano.battleroyale.juego.dominio.partida.EventoRecogido;
+import ar.pazluciano.battleroyale.juego.dominio.partida.EstadoVida;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Jugador;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Partida;
 import ar.pazluciano.battleroyale.juego.dominio.partida.ResultadoFinal;
@@ -16,12 +17,16 @@ import ar.pazluciano.battleroyale.juego.protocolo.Evento;
 import ar.pazluciano.battleroyale.juego.protocolo.Input;
 import ar.pazluciano.battleroyale.juego.protocolo.VectorMensaje;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
@@ -52,18 +57,23 @@ public class GameLoop {
     private final ConfiguracionJuego config;
     private final EmisorPartida emisor;
     private final EnsambladorSnapshot ensamblador;
+    private final ApplicationEventPublisher publicadorEventos;
     private final Queue<Comando> cola = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService executor;
+
+    /** Aproximacion de "inicio" para el auditado (F5): el dominio jamas toca reloj de pared (§2.7). */
+    private final LocalDateTime horaCreacion = LocalDateTime.now();
 
     private long ultimoNanos;
     private double acumulador;
 
     public GameLoop(Partida partida, ConfiguracionJuego config, EmisorPartida emisor,
-                    EnsambladorSnapshot ensamblador) {
+                    EnsambladorSnapshot ensamblador, ApplicationEventPublisher publicadorEventos) {
         this.partida = partida;
         this.config = config;
         this.emisor = emisor;
         this.ensamblador = ensamblador;
+        this.publicadorEventos = publicadorEventos;
         this.executor = Executors.newSingleThreadScheduledExecutor(tarea -> {
             Thread hilo = new Thread(tarea, "loop-" + partida.getId());
             hilo.setDaemon(true);
@@ -91,6 +101,11 @@ public class GameLoop {
 
     public String getIdPartida() {
         return partida.getId();
+    }
+
+    /** True cuando la gracia de FIN_PARTIDA se cumplio: el GestorPartidas puede desregistrar (R12). */
+    public boolean graciaCumplida() {
+        return partida.graciaCumplida();
     }
 
     /**
@@ -135,7 +150,48 @@ public class GameLoop {
     private void emitirEventos() {
         for (EventoDominio evento : partida.drenarEventos()) {
             emisor.emitir(aEvento(evento));
+            if (evento instanceof EventoFinPartida finPartida) {
+                publicarFinDePartida(finPartida.getResultado());
+            }
         }
+    }
+
+    /** Arma el resumen para persistir (F5, PLAN §5.4): el dominio ya termino, aca solo se lee. */
+    private void publicarFinDePartida(ResultadoFinal resultado) {
+        ResumenPartida resumen = ResumenPartida.builder()
+                .partidaId(partida.getId())
+                .fechaInicio(horaCreacion)
+                .fechaFin(LocalDateTime.now())
+                .participantes(construirParticipantes(resultado))
+                .build();
+        publicadorEventos.publishEvent(new FinDePartidaEvent(resumen));
+    }
+
+    /** Posicion final por orden de caida (R38): el ganador es 1; el resto, en el orden inverso al
+     *  que fueron muriendo (el ultimo en caer antes del ganador queda 2do). Sin dato de daño ni
+     *  tiempo de supervivencia — el dominio no lo modela, no se inventa. */
+    private List<ParticipanteResumen> construirParticipantes(ResultadoFinal resultado) {
+        String ganador = resultado.getIdGanador();
+        List<String> ordenParaPosicion = new ArrayList<>(partida.ordenEliminacion());
+        ordenParaPosicion.remove(ganador);
+        Collections.reverse(ordenParaPosicion);
+
+        Map<String, Integer> posiciones = new HashMap<>();
+        posiciones.put(ganador, 1);
+        for (int i = 0; i < ordenParaPosicion.size(); i++) {
+            posiciones.put(ordenParaPosicion.get(i), i + 2);
+        }
+
+        List<ParticipanteResumen> participantes = new ArrayList<>();
+        for (Jugador jugador : partida.jugadoresVisibles()) {
+            participantes.add(ParticipanteResumen.builder()
+                    .idJugador(jugador.getId())
+                    .kills(jugador.getKills())
+                    .muertes(jugador.getEstadoVida() == EstadoVida.MUERTO ? 1 : 0)
+                    .posicionFinal(posiciones.get(jugador.getId()))
+                    .build());
+        }
+        return participantes;
     }
 
     private Evento aEvento(EventoDominio evento) {
@@ -183,18 +239,47 @@ public class GameLoop {
             switch (comando) {
                 case ComandoUnirse unirse -> procesarUnirse(unirse);
                 case ComandoSalir salir -> retirar(salir.getIdJugador());
-                case ComandoDesconexion desconexion -> retirar(desconexion.getIdJugador());
+                case ComandoDesconexion desconexion -> marcarDesconectado(desconexion.getIdJugador());
                 case ComandoInput input -> inputs.add(input);
             }
         }
         aplicarInputsOrdenados(inputs);
     }
 
+    /**
+     * Regla unica de conexion (PLAN §5.5, R7/R26): sin jugador previo -> alta nueva. VIVO y
+     * conectado -> se RECHAZA la conexion nueva (sin Bienvenida). VIVO y desconectado -> REANUDA
+     * su plaza (misma posicion, HP, arma, inventario — nada se recrea). MUERTO -> entra como
+     * ESPECTADOR: se asocia la sesion para que reciba snapshots, sin tocar al Jugador (ya esta
+     * congelado).
+     */
     private void procesarUnirse(ComandoUnirse unirse) {
         ConexionJugador conexion = unirse.getConexion();
-        partida.agregarJugador(conexion.idJugador());
-        emisor.enviarA(conexion, construirBienvenida(conexion.idJugador()));
+        String idJugador = conexion.idJugador();
+        Optional<Jugador> existente = partida.buscarJugador(idJugador);
+
+        if (existente.isEmpty()) {
+            partida.agregarJugador(idJugador);
+        } else {
+            Jugador jugador = existente.get();
+            if (jugador.estaVivo() && jugador.isConectado()) {
+                conexion.cerrar(); // ya hay una conexion activa para este jugador (R7)
+                return;
+            }
+            if (jugador.estaVivo()) {
+                jugador.marcarConectado(); // reanuda su plaza
+            }
+            // MUERTO: no se toca nada, la sesion se asocia igual (espectador).
+        }
+
+        emisor.enviarA(conexion, construirBienvenida(idJugador));
         emisor.registrar(conexion);
+    }
+
+    /** Sigue VIVO y vulnerable (R26): el desconectado NO desaparece de la simulacion. */
+    private void marcarDesconectado(String idJugador) {
+        partida.buscarJugador(idJugador).ifPresent(Jugador::marcarDesconectado);
+        emisor.quitar(idJugador);
     }
 
     private void retirar(String idJugador) {

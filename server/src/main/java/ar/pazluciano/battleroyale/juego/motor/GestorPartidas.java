@@ -12,10 +12,11 @@ import ar.pazluciano.battleroyale.juego.dominio.partida.ParametrosZona;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Partida;
 import ar.pazluciano.battleroyale.juego.motor.mapa.CargadorMapas;
 import tools.jackson.databind.ObjectMapper;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -23,39 +24,30 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Dueno del ciclo de vida de las partidas y sus loops (PLAN §3.1). Es un bean singleton por
+ * Dueno del ciclo de vida de las partidas y sus loops (PLAN §3.1/§10-F6). Es un bean singleton por
  * inyeccion (no un Singleton con estado global): construye la simulacion a partir de la config del
  * framework y le entrega parametros PLANOS, manteniendo el dominio libre de Spring.
  *
- * <p>Fase 0: crea UNA partida local contra la que se juega en {@code localhost}. La multi-partida y
- * el matchmaking llegan en la Fase 6 sin tocar el dominio.
+ * <p>Multi-partida real (F6): cada llamada a {@link #crearPartida} arma una partida NUEVA e
+ * independiente — la crea el actor de matchmaking cuando junta cupo o vence el timeout. El sweep
+ * de {@link #limpiarPartidasFinalizadas()} es la otra mitad del ciclo de vida (R12): sin el, el
+ * mapa de loops solo crece.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class GestorPartidas {
 
-    /** Semilla fija en dev: hace la partida reproducible (mismo spawn, mismo comportamiento). */
-    private static final long SEMILLA_DEV = 42L;
-
-    /** Mapa de la partida local en dev. */
     private static final String ID_MAPA_LOCAL = "campo-01";
 
     private final ConfiguracionJuego config;
     private final ObjectMapper objectMapper;
     private final CargadorMapas cargadorMapas;
+    private final ApplicationEventPublisher publicadorEventos;
     private final Map<String, GameLoop> loops = new ConcurrentHashMap<>();
-
-    private GameLoop loopLocal;
-
-    @PostConstruct
-    void iniciarPartidaLocal() {
-        loopLocal = crearPartida(SEMILLA_DEV);
-        loopLocal.iniciar();
-        log.info("Partida local creada: {}", loopLocal.getIdPartida());
-    }
 
     @PreDestroy
     void detenerTodas() {
@@ -63,36 +55,59 @@ public class GestorPartidas {
         loops.clear();
     }
 
-    /** Loop de la unica partida local (Fase 0). La capa de red encola sus comandos aca. */
-    public GameLoop partidaLocal() {
-        return loopLocal;
-    }
-
     public Optional<GameLoop> buscarLoop(String idPartida) {
         return Optional.ofNullable(loops.get(idPartida));
     }
 
-    private GameLoop crearPartida(long semilla) {
+    /**
+     * Crea y arranca una partida nueva (PLAN §5.5, Flujo G): el actor de matchmaking la llama al
+     * completar un lote. Los humanos NO se agregan aca — se dan de alta recien cuando cada
+     * ticket se canjea por WS (R1); esta lista solo dice CUANTOS bots hacen falta para llegar a
+     * {@code jugadoresPorPartida}.
+     */
+    public GameLoop crearPartida(List<Long> idsHumanos) {
         String idPartida = UUID.randomUUID().toString();
+        long semilla = ThreadLocalRandom.current().nextLong();
         MapaJuego mapa = cargadorMapas.mapaJuego(ID_MAPA_LOCAL);
         Partida partida = new Partida(idPartida, mapa, parametrosDesdeConfig(), cicloDesdeConfig(),
                 zonaDesdeConfig(), semilla);
-        agregarBots(partida);
+        int cantidadBots = Math.max(0, config.getJugadoresPorPartida() - idsHumanos.size());
+        agregarBots(partida, cantidadBots);
         EmisorPartida emisor = new EmisorPartida(objectMapper);
-        GameLoop loop = new GameLoop(partida, config, emisor, new EnsambladorSnapshot());
+        GameLoop loop = new GameLoop(partida, config, emisor, new EnsambladorSnapshot(), publicadorEventos);
         loops.put(idPartida, loop);
+        loop.iniciar();
+        log.info("Partida {} creada: {} humanos + {} bots", idPartida, idsHumanos.size(), cantidadBots);
         return loop;
     }
 
     /**
-     * Llena la partida con {@code config.botsLocales} bots, ROTANDO por los arquetipos (Abstract
-     * Factory): asaltante, francotirador, explorador. La rotacion es deterministica; la variedad de
-     * armas sale de que cada arquetipo trae la suya, coherente con su IA.
+     * Desregistra las partidas cuya gracia de FIN_PARTIDA ya se cumplio (PLAN §7-F/§8.1, R12):
+     * apaga su executor y cierra sus sesiones WS. Publico ademas de {@code @Scheduled} para que los
+     * tests de higiene lo disparen sin esperar el scheduler real.
      */
-    private void agregarBots(Partida partida) {
+    @Scheduled(fixedDelay = 5_000)
+    public void limpiarPartidasFinalizadas() {
+        loops.entrySet().removeIf(entrada -> {
+            GameLoop loop = entrada.getValue();
+            if (!loop.graciaCumplida()) {
+                return false;
+            }
+            loop.detener();
+            log.info("Partida {} desregistrada (gracia cumplida)", entrada.getKey());
+            return true;
+        });
+    }
+
+    /**
+     * Llena la partida con {@code cantidadBots}, ROTANDO por los arquetipos (Abstract Factory):
+     * asaltante, francotirador, explorador. La rotacion es deterministica; la variedad de armas
+     * sale de que cada arquetipo trae la suya, coherente con su IA.
+     */
+    private void agregarBots(Partida partida, int cantidadBots) {
         List<FabricaParticipante> arquetipos = List.of(
                 new FabricaAsaltante(), new FabricaFrancotirador(), new FabricaExplorador());
-        for (int i = 0; i < config.getBotsLocales(); i++) {
+        for (int i = 0; i < cantidadBots; i++) {
             partida.agregarParticipante("bot-" + i, arquetipos.get(i % arquetipos.size()));
         }
     }

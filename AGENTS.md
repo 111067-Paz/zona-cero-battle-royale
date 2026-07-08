@@ -76,13 +76,16 @@ Reglas que se revisan en TODO PR:
 | Comandos fallan por el path | La carpeta tiene espacios y paréntesis: `Battle royale (LL)` | Git Bash con comillas: `cd "/f/Proyectos/Battle royale (LL)"` |
 | Error raro de librería tras upgrade | El conocimiento del modelo puede ser viejo | **Inspeccionar el jar real**: `unzip -l <jar>` para paquetes, `javap -cp <jar> <Clase>` para firmas. NO adivinar |
 | `X is not public in Y; cannot be accessed from outside package` en el dominio | Un método package-private de una clase de `dominio/combate` (ej. `Proyectil.avanzarA`) llamado desde `dominio/partida` (`Partida`) — son paquetes DISTINTOS aunque ambos sean "dominio puro" | Package-private solo sirve si la clase llamante comparte paquete (como `Jugador`↔`Partida`). Cruzando de `combate`↔`partida`, el método debe ser `public` — la seguridad de concurrencia la da el hilo del loop (§2.4), no la visibilidad |
+| `ConversionFailedException` al bindear `spring.jackson.serialization.write-dates-as-timestamps` | Jackson 3 recortó `SerializationFeature` a 16 constantes; `WRITE_DATES_AS_TIMESTAMPS` ya no existe. `java.time.*` serializa ISO-8601 por defecto sin ese flag | Borrar la propiedad. `spring.jackson.time-zone` sigue haciendo falta |
+| `Table "X" not found (this database is empty)` en el primer INSERT/SELECT, sin ningún error de arranque ni línea de Flyway en el log | Boot 4 movió `FlywayAutoConfiguration` fuera de `spring-boot-autoconfigure` a un módulo separado (mismo patrón que `spring-boot-json`/`spring-boot-h2console`). Declarar solo `flyway-core` compila y arranca sin avisar nada — Flyway simplemente nunca corre | Agregar también `org.springframework.boot:spring-boot-flyway` (sin version) |
+| `jakarta.persistence.TransactionRequiredException: No active transaction` al invocar un `@Modifying @Query` custom desde fuera de un `@Transactional` (ej. desde un test o un hilo propio) | Spring Data JPA NO abre transacción propia para métodos `@Modifying` personalizados — a diferencia de `save()`/`delete()` del CRUD estándar, que sí la abren solos | Envolver la llamada en un `@Transactional` (producción) o `TransactionTemplate.executeWithoutResult(...)` (tests que necesitan concurrencia real, sin heredar la transacción del hilo de test) |
 
 ## 6. Comandos (los corre el humano)
 
 ```bash
 # Backend — desde server/
 ./mvnw clean test              # compilar + tests (15 verdes al cierre de Fase 0)
-./mvnw spring-boot:run         # levanta en :8080 y crea la partida local
+./mvnw spring-boot:run         # levanta en :8080 (F6: sin partida-unica de dev, hace falta matchmaking)
 ./mvnw clean test jacoco:report  # cobertura → target/site/jacoco/index.html
 
 # Frontend — desde client/
@@ -134,14 +137,21 @@ Al terminar trabajo significativo: `mem_save` con lo aprendido (obligatorio, no 
   (Factory Method) y desempates deterministas. Corrección post-cierre: bots ahora priorizan
   `BuscarZona` con prioridad absoluta (interrumpe combate) — cerraba un gap del propio plan
   §8.3 que en F3 había quedado diferido por no existir la zona todavía.
-- [ ] **Fase 5 — Plataforma (cuentas, JWT, persistencia)**
-  DoD: me registro, juego contra bots, mis estadísticas (con `muertes` y `top3`, R38) sobreviven
-  un reinicio y se ven en `/lobby`; endpoints protegidos → 401/403. Ticket de un solo uso para
-  el WS (R1); refresh con rotación y familia (R18); UPDATE atómico de stats (R13).
-- [ ] **Fase 6 — Multijugador real**
+- [x] **Fase 5 — Plataforma (cuentas, JWT, persistencia)** *(cerrada 2026-07-08)*
+  DoD validado: registro/login/refresh con rotación (R18), ticket de un solo uso para el WS (R1),
+  `ResultadoPartidaListener` transaccional idempotente con UPDATE atómico (R13), `/api/estadisticas/mias`
+  y `/ranking` paginado, frontend completo (forms, interceptor, guards, `/lobby` real, `CanDeactivate`
+  en `/partida`). 138 tests BE verdes (incluye stats concurrentes, canje de ticket un uso/vencido/inválido).
+  Gotchas Boot 4 nuevos: `write-dates-as-timestamps` ya no existe como `SerializationFeature` de Jackson 3
+  (romper el binding); `FlywayAutoConfiguration` se movió a `spring-boot-flyway` (módulo separado, igual
+  que Jackson) — sin él, Flyway nunca corre y ninguna tabla se crea, sin error de arranque.
+- [ ] **Fase 6 — Multijugador real** *(código + 138 tests BE verdes; falta DoD manual del humano)*
   DoD: dos navegadores, dos cuentas, misma partida; estadísticas de ambos persistidas.
-  **REGLA DE LA FASE: `juego/dominio` NO SE TOCA** — es la prueba de fuego de la arquitectura.
-  Test de higiene: 50 partidas creadas y terminadas → cero hilos y cero referencias residuales (R12).
+  **REGLA DE LA FASE: `juego/dominio` NO SE TOCA** — verificado (único diff en `Partida.java` es
+  `ordenEliminacion`, de Fase 5). Implementado: `ActorMatchmaking` (un hilo, cola+dedup+timeout→bots,
+  R6), `GestorPartidas` multi-partida real + sweep de higiene (R12, `graciaCumplida()` ya consumido),
+  ticket con `idPartida`, `HandlerPartida` resuelve loop por sesión, frontend PLAY→cola→polling
+  "n/10"→`/partida?idPartida=`. Test de higiene: 50 partidas creadas y terminadas → cero residuos, verde.
 - [ ] **Fase 7 — Calidad de red** (prediction + reconciliación con sec/acks; jugable con 150 ms)
 - [ ] **Fase 8 — Renderer isométrico** (cero cambios fuera de `render/` — prueba del Bridge)
 

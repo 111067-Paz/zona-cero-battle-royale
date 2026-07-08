@@ -7,6 +7,7 @@ import {
   OnDestroy,
   viewChild,
 } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { MensajeServidor, VERSION_PROTOCOLO } from '../../models/protocolo';
 import { ConexionPartidaService } from './conexion-partida.service';
@@ -17,6 +18,7 @@ import { MapaService } from './mapa.service';
 import { OverlayEstadoComponent } from './overlay-estado.component';
 import { RendererJuego } from './render/renderer-juego';
 import { RendererTopDown2D } from './render/renderer-top-down-2d';
+import { TicketService } from './ticket.service';
 
 /**
  * Raiz de composicion del feature de partida (PLAN §7-B/§7-C). Es el UNICO punto que conecta las
@@ -87,15 +89,26 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
   private readonly entrada = inject(EntradaService);
   private readonly store = inject(EstadoPartidaStore);
   private readonly mapaService = inject(MapaService);
+  private readonly ticketService = inject(TicketService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   private readonly lienzo = viewChild.required<ElementRef<HTMLCanvasElement>>('lienzo');
   private readonly renderer: RendererJuego = new RendererTopDown2D();
   private readonly suscripciones: Subscription[] = [];
   private rafId = 0;
+  private idPartida = '';
 
   readonly estadoConexion = this.conexion.estado;
 
   async ngAfterViewInit(): Promise<void> {
+    const idPartida = this.route.snapshot.queryParamMap.get('idPartida');
+    if (idPartida === null) {
+      this.router.navigate(['/lobby']);
+      return;
+    }
+    this.idPartida = idPartida;
+
     const canvas = this.lienzo().nativeElement;
     await this.renderer.iniciar(canvas);
 
@@ -117,9 +130,16 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
     this.suscripciones.forEach((suscripcion) => suscripcion.unsubscribe());
   }
 
+  /** Pide el ticket recien al abrir el socket (TTL 30s, R1): pedirlo antes arriesga que venza. */
   private alAbrirConexion(): void {
     this.entrada.reiniciarSecuencia();
-    this.conexion.enviar({ v: VERSION_PROTOCOLO, tipo: 'UNIRSE', ticket: null });
+    this.suscripciones.push(
+      this.ticketService.solicitar(this.idPartida).subscribe({
+        next: (ticket) =>
+          this.conexion.enviar({ v: VERSION_PROTOCOLO, tipo: 'UNIRSE', ticket }),
+        error: () => this.conexion.desconectar(),
+      }),
+    );
   }
 
   private despachar(mensaje: MensajeServidor): void {

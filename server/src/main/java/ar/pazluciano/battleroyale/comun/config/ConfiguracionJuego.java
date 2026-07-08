@@ -36,9 +36,6 @@ public class ConfiguracionJuego {
     /** Puntos de vida iniciales. */
     private int vida;
 
-    /** Cantidad de bots con que se llena la partida local en dev (tunable, no hardcodeado). */
-    private int botsLocales;
-
     // ---- Ciclo de partida (F4, PLAN §4.3). En SEGUNDOS: el ritmo de partida se ajusta ENTERO por
     // config, sin tocar codigo — "que pueda seleccionar el tiempo de partida". ----
 
