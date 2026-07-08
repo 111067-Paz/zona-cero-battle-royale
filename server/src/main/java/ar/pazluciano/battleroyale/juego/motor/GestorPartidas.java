@@ -1,7 +1,11 @@
 package ar.pazluciano.battleroyale.juego.motor;
 
 import ar.pazluciano.battleroyale.comun.config.ConfiguracionJuego;
+import ar.pazluciano.battleroyale.juego.dominio.bots.FabricaAsaltante;
+import ar.pazluciano.battleroyale.juego.dominio.bots.FabricaExplorador;
+import ar.pazluciano.battleroyale.juego.dominio.bots.FabricaFrancotirador;
 import ar.pazluciano.battleroyale.juego.dominio.mapa.MapaJuego;
+import ar.pazluciano.battleroyale.juego.dominio.participante.FabricaParticipante;
 import ar.pazluciano.battleroyale.juego.dominio.partida.ParametrosSimulacion;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Partida;
 import ar.pazluciano.battleroyale.juego.motor.mapa.CargadorMapas;
@@ -12,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -69,10 +74,24 @@ public class GestorPartidas {
         String idPartida = UUID.randomUUID().toString();
         MapaJuego mapa = cargadorMapas.mapaJuego(ID_MAPA_LOCAL);
         Partida partida = new Partida(idPartida, mapa, parametrosDesdeConfig(), semilla);
+        agregarBots(partida);
         EmisorPartida emisor = new EmisorPartida(objectMapper);
         GameLoop loop = new GameLoop(partida, config, emisor, new EnsambladorSnapshot());
         loops.put(idPartida, loop);
         return loop;
+    }
+
+    /**
+     * Llena la partida con {@code config.botsLocales} bots, ROTANDO por los arquetipos (Abstract
+     * Factory): asaltante, francotirador, explorador. La rotacion es deterministica; la variedad de
+     * armas sale de que cada arquetipo trae la suya, coherente con su IA.
+     */
+    private void agregarBots(Partida partida) {
+        List<FabricaParticipante> arquetipos = List.of(
+                new FabricaAsaltante(), new FabricaFrancotirador(), new FabricaExplorador());
+        for (int i = 0; i < config.getBotsLocales(); i++) {
+            partida.agregarParticipante("bot-" + i, arquetipos.get(i % arquetipos.size()));
+        }
     }
 
     private ParametrosSimulacion parametrosDesdeConfig() {

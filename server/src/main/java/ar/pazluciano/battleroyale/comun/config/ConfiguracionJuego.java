@@ -36,6 +36,9 @@ public class ConfiguracionJuego {
     /** Puntos de vida iniciales. */
     private int vida;
 
+    /** Cantidad de bots con que se llena la partida local en dev (tunable, no hardcodeado). */
+    private int botsLocales;
+
     /** Paso de integracion fijo, en segundos. El loop jamas usa el reloj de pared para fisica. */
     public double dt() {
         return 1.0 / tickRate;

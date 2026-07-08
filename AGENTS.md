@@ -119,10 +119,14 @@ Al terminar trabajo significativo: `mem_save` con lo aprendido (obligatorio, no 
   `idRed` monotónico (pool diferido a F7), colisión por segmento (anti-tunneling real), HUD sin
   munición (R10/R31). Gotcha: métodos de `Proyectil` llamados desde `Partida` (paquete distinto,
   `dominio.combate` vs `dominio.partida`) deben ser `public`, no package-private.
-- [ ] **Fase 3 — Bots**
-  DoD: 1 humano vs 9 bots jugable y desafiante en dificultad media. Bots escriben la MISMA
-  `IntencionJugador` que un humano (cero `if (esBot)` en la simulación); no disparan a través
-  de paredes; con semilla fija repiten exactamente su comportamiento.
+- [x] **Fase 3 — Bots** *(cerrada 2026-07-06)*
+  DoD validado: 1 humano vs 9 bots jugable y desafiante; arquetipos con armas variadas; no
+  disparan a través de paredes. Arquitectura (a pedido del usuario, máxima abstracción):
+  **Abstract Factory** (FabricaParticipante → FabricaHumano/Asaltante/Francotirador/Explorador,
+  familias {Arma+Comportamiento}), **Null Object** (ComportamientoRemoto = humano, cero if(esBot)),
+  **State** (FSM Merodear/Perseguir/Atacar con histéresis + RepertorioEstados), **Strategy**
+  (Comportamiento). Humanos y bots se crean por el MISMO camino (agregarParticipante). Bots-locales
+  configurable (no hardcodeado).
 - [ ] **Fase 4 — Battle royale completo (local)**
   DoD: partida completa contra 9 bots de lobby a ganador, con HUD Battle Bash (radar solo
   zona+yo R30, GAS CLOSING, TIME desde tickInicio R27, quick-slot botiquín×n R28) y pantallas

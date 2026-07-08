@@ -5,12 +5,15 @@ import ar.pazluciano.battleroyale.juego.dominio.combate.ColisionSegmento;
 import ar.pazluciano.battleroyale.juego.dominio.combate.EspecificacionDisparo;
 import ar.pazluciano.battleroyale.juego.dominio.combate.EventoKill;
 import ar.pazluciano.battleroyale.juego.dominio.combate.ImpactoSegmento;
-import ar.pazluciano.battleroyale.juego.dominio.combate.Pistola;
 import ar.pazluciano.battleroyale.juego.dominio.combate.Proyectil;
 import ar.pazluciano.battleroyale.juego.dominio.combate.TipoArma;
 import ar.pazluciano.battleroyale.juego.dominio.mapa.MapaJuego;
 import ar.pazluciano.battleroyale.juego.dominio.mapa.ObstaculoAABB;
 import ar.pazluciano.battleroyale.juego.dominio.mapa.ResolutorColisiones;
+import ar.pazluciano.battleroyale.juego.dominio.participante.Comportamiento;
+import ar.pazluciano.battleroyale.juego.dominio.participante.FabricaHumano;
+import ar.pazluciano.battleroyale.juego.dominio.participante.FabricaParticipante;
+import ar.pazluciano.battleroyale.juego.dominio.participante.VistaMundo;
 import lombok.AccessLevel;
 import lombok.Getter;
 
@@ -35,7 +38,7 @@ import java.util.Random;
  * acumulan como {@link EventoKill} para que el motor los emita DESPUES del snapshot (R22).
  */
 @Getter
-public class Partida {
+public class Partida implements VistaMundo {
 
     /** Vida maxima de un proyectil sin impactar (tope de seguridad; paredes/bordes lo matan antes). */
     private static final long VIDA_PROYECTIL_TICKS = 120L;
@@ -56,6 +59,10 @@ public class Partida {
 
     /** LinkedHashMap: lookup O(1) por id + iteracion en orden de insercion (determinismo). */
     private final Map<String, Jugador> jugadores = new LinkedHashMap<>();
+
+    /** Fuente de intencion de cada participante: Null Object para humanos, FSM para bots. */
+    @Getter(AccessLevel.NONE)
+    private final Map<String, Comportamiento> comportamientos = new LinkedHashMap<>();
 
     /** Proyectiles en vuelo, en orden de creacion = orden de idRed (determinismo de daños). */
     @Getter(AccessLevel.NONE)
@@ -80,20 +87,28 @@ public class Partida {
         this.rng = new Random(semilla);
     }
 
-    /**
-     * Alta de un jugador en un spawn del mapa (por orden de union, ya validado). Nace VIVO, conectado,
-     * con la vida inicial y equipado con Pistola (R17).
-     */
+    /** Alta de un HUMANO: usa la {@link FabricaHumano} (Pistola + Null Object, R17). */
     public Jugador agregarJugador(String idJugador) {
+        return agregarParticipante(idJugador, new FabricaHumano());
+    }
+
+    /**
+     * Alta de un participante (humano o bot) con su fabrica (Abstract Factory): nace en un spawn del
+     * mapa, VIVO, con el arma y el comportamiento que dicta el arquetipo. Asi humanos y bots se crean
+     * por el MISMO camino (§4.1); la unica diferencia es el comportamiento que trae la familia.
+     */
+    public Jugador agregarParticipante(String idJugador, FabricaParticipante fabrica) {
         int ordenUnion = proximoOrdenUnion++;
         Jugador jugador = new Jugador(idJugador, ordenUnion, mapa.spawnPara(ordenUnion), params.getVidaInicial());
-        jugador.equipar(new Pistola());
+        jugador.equipar(fabrica.crearArma(rng));
         jugadores.put(idJugador, jugador);
+        comportamientos.put(idJugador, fabrica.crearComportamiento());
         return jugador;
     }
 
     public void quitarJugador(String idJugador) {
         jugadores.remove(idJugador);
+        comportamientos.remove(idJugador);
     }
 
     public Optional<Jugador> buscarJugador(String idJugador) {
@@ -114,6 +129,7 @@ public class Partida {
      * la boca del arma y recien se mueven el proximo tick) y decrementa cooldowns.
      */
     public void avanzarTick() {
+        pensarParticipantes();
         for (Jugador jugador : jugadores.values()) {
             if (jugador.estaVivo()) {
                 simularMovimiento(jugador);
@@ -123,6 +139,23 @@ public class Partida {
         procesarDisparos();
         decrementarCooldowns();
         tick++;
+    }
+
+    /**
+     * Cada participante VIVO "piensa" su intencion, en orden estable. El humano tiene un Null Object
+     * que no hace nada (su intencion ya llego por la red); el bot corre su FSM. Despues de esto, el
+     * resto del tick es ciego a quien escribio la intencion — cero {@code if(esBot)} (§4.1).
+     */
+    private void pensarParticipantes() {
+        for (Jugador jugador : jugadores.values()) {
+            if (!jugador.estaVivo()) {
+                continue;
+            }
+            Comportamiento comportamiento = comportamientos.get(jugador.getId());
+            if (comportamiento != null) {
+                comportamiento.pensar(jugador, this, rng);
+            }
+        }
     }
 
     private void simularMovimiento(Jugador jugador) {
@@ -146,7 +179,7 @@ public class Partida {
             Proyectil proyectil = iterador.next();
             Vector2 origen = proyectil.getPosicion();
             Vector2 destino = proyectil.destinoDelTick();
-            List<Jugador> objetivos = objetivosPara(proyectil.getIdDueno());
+            List<Jugador> objetivos = rivalesVivos(proyectil.getIdDueno());
             ImpactoSegmento impacto = colisionSegmento.primerImpacto(origen, destino, obstaculos, objetivos, radio);
 
             if (impacto.impactoJugador()) {
@@ -203,14 +236,22 @@ public class Partida {
         }
     }
 
-    private List<Jugador> objetivosPara(String idDueno) {
-        List<Jugador> objetivos = new ArrayList<>();
+    /** VistaMundo: jugadores VIVOS distintos del propio (conectados o no, R26). Reusado por combate y bots. */
+    @Override
+    public List<Jugador> rivalesVivos(String idPropio) {
+        List<Jugador> rivales = new ArrayList<>();
         for (Jugador jugador : jugadores.values()) {
-            if (jugador.estaVivo() && !jugador.getId().equals(idDueno)) {
-                objetivos.add(jugador);
+            if (jugador.estaVivo() && !jugador.getId().equals(idPropio)) {
+                rivales.add(jugador);
             }
         }
-        return objetivos;
+        return rivales;
+    }
+
+    /** VistaMundo: raycast desde->hasta contra obstaculos (sin jugadores). Hay vista si no hay pared. */
+    @Override
+    public boolean hayLineaDeVista(Vector2 desde, Vector2 hasta) {
+        return !colisionSegmento.primerImpacto(desde, hasta, mapa.getObstaculos(), List.of(), 0.0).huboImpacto();
     }
 
     private boolean fueraDeMapa(Vector2 posicion) {

@@ -18,6 +18,7 @@ juego:
   radio-jugador: 0.5            # colision circular
   velocidad-jugador: 5.0        # u/s; clampeada SIEMPRE server-side (anti speed-hack)
   vida: 100                     # HP inicial
+  bots-locales: 9              # bots que llenan la partida de dev (1 humano + 9 = 10)
 
 server:
   port: 8080

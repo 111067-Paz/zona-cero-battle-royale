@@ -74,6 +74,16 @@ public class Jugador {
         this.arma = arma;
     }
 
+    /**
+     * Escribe la intencion desde una fuente interna CONFIABLE (la IA de un bot), sin control de
+     * secuencia. Es el equivalente de {@link #aplicarInput} para fuentes que no son la red: termina
+     * en la MISMA {@code IntencionJugador} que un humano, de modo que el resto del tick no distingue
+     * quien la escribio (PLAN §4.1).
+     */
+    public void definirIntencion(Vector2 mover, double apuntar, boolean disparar) {
+        intencion.reemplazar(mover, apuntar, disparar);
+    }
+
     public boolean estaVivo() {
         return estadoVida == EstadoVida.VIVO;
     }
