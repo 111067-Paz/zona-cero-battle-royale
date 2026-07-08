@@ -1,7 +1,11 @@
 package ar.pazluciano.battleroyale.juego.dominio.partida;
 
 import ar.pazluciano.battleroyale.juego.dominio.combate.Arma;
+import lombok.AccessLevel;
 import lombok.Getter;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Un jugador dentro de una partida (PLAN §4.1). Un bot ES un Jugador cuya intencion la escribe una
@@ -35,6 +39,23 @@ public class Jugador {
 
     private int kills = 0;
 
+    /** Vida maxima (= vida inicial, R32: igual para todos). Tope de {@link #usarBotiquin()}. */
+    private final int vidaMaxima;
+
+    private static final int MAX_BOTIQUINES = 3;
+    private static final int CURACION_BOTIQUIN = 50;
+
+    /** Botiquines en inventario (0-3, R28). */
+    private int botiquines = 0;
+
+    /** Resto fraccional de dano de zona sin aplicar todavia; exacto tras 30 ticks (§7-E). */
+    @Getter(AccessLevel.NONE)
+    private double acumuladorDanioZona = 0.0;
+
+    /** Acciones one-shot pendientes de este tick (RECOGER/USAR_BOTIQUIN), cap 2 (§5.1/§5.3). */
+    @Getter(AccessLevel.NONE)
+    private final List<AccionJugador> accionesPendientes = new ArrayList<>();
+
     /** Ultima secuencia de INPUT procesada. Base del descarte anti-replay/duplicado (§5.1). */
     private long ultimaSec = 0L;
 
@@ -43,6 +64,7 @@ public class Jugador {
         this.ordenUnion = ordenUnion;
         this.posicion = posicionInicial;
         this.hp = hpInicial;
+        this.vidaMaxima = hpInicial;
     }
 
     /**
@@ -50,12 +72,18 @@ public class Jugador {
      * se descarta en silencio (anti-replay, anti-duplicado, anti-reordenamiento) y devuelve false.
      * Caso contrario reemplaza la intencion vigente (last-wins) y avanza {@link #ultimaSec}.
      */
-    public boolean aplicarInput(long sec, Vector2 mover, double apuntar, boolean disparar) {
+    public boolean aplicarInput(long sec, Vector2 mover, double apuntar, boolean disparar,
+                                List<AccionJugador> acciones) {
         if (sec <= ultimaSec) {
             return false;
         }
         intencion.reemplazar(mover, apuntar, disparar);
         ultimaSec = sec;
+        if (acciones != null) {
+            for (AccionJugador accion : acciones) {
+                encolarAccion(accion);
+            }
+        }
         return true;
     }
 
@@ -115,6 +143,51 @@ public class Jugador {
 
     void sumarKill() {
         kills++;
+    }
+
+    /** Encola una accion one-shot; tope 2 vigentes (§5.1/§5.3, defensa anti-spam). */
+    private void encolarAccion(AccionJugador accion) {
+        if (accionesPendientes.size() < 2) {
+            accionesPendientes.add(accion);
+        }
+    }
+
+    /** Devuelve y limpia las acciones pendientes. La {@link Partida} las consume una vez por tick. */
+    List<AccionJugador> drenarAcciones() {
+        List<AccionJugador> copia = new ArrayList<>(accionesPendientes);
+        accionesPendientes.clear();
+        return copia;
+    }
+
+    /** Suma un botiquin si hay lugar. Devuelve false (no-op) si ya tiene el maximo (R28/R37). */
+    boolean sumarBotiquin() {
+        if (botiquines >= MAX_BOTIQUINES) {
+            return false;
+        }
+        botiquines++;
+        return true;
+    }
+
+    /** Consume un botiquin y cura, sin superar la vida maxima. Sin botiquin, no-op (descartado). */
+    void usarBotiquin() {
+        if (botiquines <= 0) {
+            return;
+        }
+        botiquines--;
+        hp = Math.min(vidaMaxima, hp + CURACION_BOTIQUIN);
+    }
+
+    /**
+     * Acumula dano de zona fraccional y aplica el entero acumulado cuando llega a 1 (§7-E): asi el
+     * dano total tras 30 ticks es EXACTO, sin perder precision por redondeo por tick.
+     */
+    void aplicarDanioZonaFraccional(double danioPorSegundo, double dt) {
+        acumuladorDanioZona += danioPorSegundo * dt;
+        if (acumuladorDanioZona >= 1.0) {
+            int entero = (int) acumuladorDanioZona;
+            acumuladorDanioZona -= entero;
+            recibirDanio(entero);
+        }
     }
 
     public void marcarDesconectado() {

@@ -22,7 +22,7 @@ class PartidaCombateTest {
     /** Mapa despejado con dos spawns enfrentados en la misma linea horizontal. */
     private MapaJuego mapa() {
         return new MapaJuego("t", 100.0, 100.0, List.of(),
-                List.of(new Vector2(10.0, 50.0), new Vector2(16.0, 50.0)));
+                List.of(new Vector2(10.0, 50.0), new Vector2(16.0, 50.0)), List.of());
     }
 
     private ParametrosSimulacion params() {
@@ -30,8 +30,23 @@ class PartidaCombateTest {
                 .dt(DT).radioJugador(RADIO).velocidadJugador(VELOCIDAD).vidaInicial(VIDA).build();
     }
 
+    private ParametrosCiclo ciclo() {
+        return ParametrosCiclo.builder().lobbyTimeoutTicks(1).cuentaRegresivaTicks(1).graciaFinTicks(1).build();
+    }
+
+    /** Zona sin efecto: estos tests son de combate, no de zona. */
+    private ParametrosZona zonaNeutra() {
+        return ParametrosZona.builder()
+                .radioInicial(10_000.0).radioMinimo(10_000.0).cantidadFases(0)
+                .ticksContraccion(1).ticksEspera(999_999).danioPorSegundo(0.0)
+                .build();
+    }
+
+    /** Ya EN_CURSO: estos tests son de mecanica de combate, no de la ceremonia de inicio. */
     private Partida partida() {
-        return new Partida("p", mapa(), params(), 1L);
+        Partida partida = new Partida("p", mapa(), params(), ciclo(), zonaNeutra(), 1L);
+        partida.forzarInicioInmediato();
+        return partida;
     }
 
     @Test
@@ -39,7 +54,7 @@ class PartidaCombateTest {
     void avanzarTick_disparar_enganchaCooldownYCreaProyectil() {
         Partida partida = partida();
         Jugador a = partida.agregarJugador("A");
-        partida.aplicarInput("A", 1L, Vector2.CERO, 0.0, true);
+        partida.aplicarInput("A", 1L, Vector2.CERO, 0.0, true, List.of());
 
         partida.avanzarTick();
 
@@ -56,7 +71,7 @@ class PartidaCombateTest {
         Partida partida = partida();
         Jugador a = partida.agregarJugador("A"); // (10,50)
         Jugador b = partida.agregarJugador("B"); // (16,50)
-        partida.aplicarInput("A", 1L, Vector2.CERO, 0.0, true); // apunta a +x, hacia B
+        partida.aplicarInput("A", 1L, Vector2.CERO, 0.0, true, List.of()); // apunta a +x, hacia B
 
         for (int i = 0; i < 100; i++) {
             partida.avanzarTick();
@@ -72,8 +87,8 @@ class PartidaCombateTest {
         Partida partida = partida();
         Jugador a = partida.agregarJugador("A"); // (10,50)
         Jugador b = partida.agregarJugador("B"); // (16,50)
-        partida.aplicarInput("A", 1L, Vector2.CERO, 0.0, true);       // A -> +x (a B)
-        partida.aplicarInput("B", 1L, Vector2.CERO, Math.PI, true);   // B -> -x (a A)
+        partida.aplicarInput("A", 1L, Vector2.CERO, 0.0, true, List.of());       // A -> +x (a B)
+        partida.aplicarInput("B", 1L, Vector2.CERO, Math.PI, true, List.of());   // B -> -x (a A)
 
         for (int i = 0; i < 120; i++) {
             partida.avanzarTick();
@@ -91,12 +106,12 @@ class PartidaCombateTest {
         Partida partida = partida();
         Jugador a = partida.agregarJugador("A");
         Jugador b = partida.agregarJugador("B");
-        partida.aplicarInput("A", 1L, Vector2.CERO, 0.0, true);
+        partida.aplicarInput("A", 1L, Vector2.CERO, 0.0, true, List.of());
         for (int i = 0; i < 100; i++) {
             partida.avanzarTick();
         }
         // B ya esta muerto; le pedimos que dispare y verificamos que no suma bajas
-        partida.aplicarInput("B", 2L, Vector2.CERO, Math.PI, true);
+        partida.aplicarInput("B", 2L, Vector2.CERO, Math.PI, true, List.of());
         int killsDeBAntes = b.getKills();
         for (int i = 0; i < 60; i++) {
             partida.avanzarTick();

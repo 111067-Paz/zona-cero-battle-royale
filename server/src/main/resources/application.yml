@@ -20,5 +20,19 @@ juego:
   vida: 100                     # HP inicial
   bots-locales: 9              # bots que llenan la partida de dev (1 humano + 9 = 10)
 
+  # Ciclo de partida (F4). Timeout de lobby FIJO en modo local (sin matchmaking hasta F6).
+  lobby-timeout-segundos: 5
+  cuenta-regresiva-segundos: 3
+  gracia-fin-segundos: 10
+
+  # Zona segura (F4). Ritmo total aproximado: espera + fases*(contraccion+espera) ~ 190s (~3 min).
+  # Todo configurable — "seleccionar el tiempo de partida" es cambiar estos numeros, no el codigo.
+  zona-radio-inicial: 100.0
+  zona-radio-minimo: 15.0
+  zona-cantidad-fases: 5
+  zona-contraccion-segundos: 20
+  zona-espera-segundos: 15
+  zona-danio-por-segundo: 5.0
+
 server:
   port: 8080

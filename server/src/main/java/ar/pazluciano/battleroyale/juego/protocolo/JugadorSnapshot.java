@@ -30,4 +30,7 @@ public class JugadorSnapshot {
     private boolean conectado;
     private TipoArma arma;
     private int kills;
+
+    /** Botiquines en inventario (0-3, R28), para el quick-slot del HUD. */
+    private int botiquines;
 }

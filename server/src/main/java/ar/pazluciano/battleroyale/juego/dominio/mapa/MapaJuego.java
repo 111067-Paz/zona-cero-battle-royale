@@ -22,13 +22,17 @@ public final class MapaJuego {
     private final List<ObstaculoAABB> obstaculos;
     private final List<Vector2> spawns;
 
+    /** Puntos donde puede aparecer botin al iniciar EN_CURSO (F4). Server-side: no viaja por REST. */
+    private final List<Vector2> spawnsBotin;
+
     public MapaJuego(String id, double ancho, double alto, List<ObstaculoAABB> obstaculos,
-                     List<Vector2> spawns) {
+                     List<Vector2> spawns, List<Vector2> spawnsBotin) {
         this.id = id;
         this.ancho = ancho;
         this.alto = alto;
         this.obstaculos = List.copyOf(obstaculos);
         this.spawns = List.copyOf(spawns);
+        this.spawnsBotin = List.copyOf(spawnsBotin);
     }
 
     /**

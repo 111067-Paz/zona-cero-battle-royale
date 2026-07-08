@@ -24,5 +24,6 @@ public class DefinicionMapa {
     private double alto;
     private List<RectanguloMapa> obstaculos;
     private List<PuntoMapa> spawns;
+    private List<PuntoMapa> spawnsBotin;
     private List<DecoracionMapa> decoraciones;
 }

@@ -105,6 +105,9 @@ public class CargadorMapas {
         for (PuntoMapa spawn : spawns) {
             validarSpawn(id, definicion, radio, obstaculos, spawn);
         }
+        for (PuntoMapa spawnBotin : spawnsBotinDe(definicion)) {
+            validarSpawn(id, definicion, radio, obstaculos, spawnBotin);
+        }
     }
 
     private void validarObstaculo(String id, DefinicionMapa definicion, ObstaculoAABB obstaculo) {
@@ -148,7 +151,14 @@ public class CargadorMapas {
         List<Vector2> spawns = definicion.getSpawns().stream()
                 .map(p -> new Vector2(p.getX(), p.getY()))
                 .toList();
-        return new MapaJuego(id, definicion.getAncho(), definicion.getAlto(), obstaculos, spawns);
+        List<Vector2> spawnsBotin = spawnsBotinDe(definicion).stream()
+                .map(p -> new Vector2(p.getX(), p.getY()))
+                .toList();
+        return new MapaJuego(id, definicion.getAncho(), definicion.getAlto(), obstaculos, spawns, spawnsBotin);
+    }
+
+    private List<PuntoMapa> spawnsBotinDe(DefinicionMapa definicion) {
+        return definicion.getSpawnsBotin() == null ? List.of() : definicion.getSpawnsBotin();
     }
 
     private MapaDto aMapaDto(String id, DefinicionMapa definicion) {

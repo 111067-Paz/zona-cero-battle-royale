@@ -24,12 +24,25 @@ class PartidaBotsTest {
                 .dt(DT).radioJugador(RADIO).velocidadJugador(VELOCIDAD).vidaInicial(VIDA).build();
     }
 
+    private ParametrosCiclo ciclo() {
+        return ParametrosCiclo.builder().lobbyTimeoutTicks(1).cuentaRegresivaTicks(1).graciaFinTicks(1).build();
+    }
+
+    /** Zona sin efecto: estos tests son de mecanica de bots, no de zona. */
+    private ParametrosZona zonaNeutra() {
+        return ParametrosZona.builder()
+                .radioInicial(10_000.0).radioMinimo(10_000.0).cantidadFases(0)
+                .ticksContraccion(1).ticksEspera(999_999).danioPorSegundo(0.0)
+                .build();
+    }
+
     @Test
     @DisplayName("dos bots cercanos se detectan, pelean y al menos uno muere (sin excepciones)")
     void avanzarTick_dosBotsCercanos_peleanYAlgunoMuere() {
         MapaJuego mapa = new MapaJuego("t", 100.0, 100.0, List.of(),
-                List.of(new Vector2(10.0, 50.0), new Vector2(16.0, 50.0)));
-        Partida partida = new Partida("p", mapa, params(), 1L);
+                List.of(new Vector2(10.0, 50.0), new Vector2(16.0, 50.0)), List.of());
+        Partida partida = new Partida("p", mapa, params(), ciclo(), zonaNeutra(), 1L);
+        partida.forzarInicioInmediato();
         partida.agregarParticipante("bot-0", new FabricaExplorador());
         partida.agregarParticipante("bot-1", new FabricaExplorador());
 
@@ -46,10 +59,11 @@ class PartidaBotsTest {
     @Test
     @DisplayName("el humano (Null Object) NO se mueve solo si no llega input de la red")
     void avanzarTick_humanoSinInput_noSeMueve() {
-        MapaJuego mapa = new MapaJuego("t", 100.0, 100.0, List.of(), List.of(new Vector2(10.0, 50.0)));
-        Partida partida = new Partida("p", mapa, params(), 1L);
+        MapaJuego mapa = new MapaJuego("t", 100.0, 100.0, List.of(), List.of(new Vector2(10.0, 50.0)), List.of());
+        Partida partida = new Partida("p", mapa, params(), ciclo(), zonaNeutra(), 1L);
         Jugador humano = partida.agregarJugador("h");
         Vector2 inicial = humano.getPosicion();
+        partida.forzarInicioInmediato();
 
         for (int i = 0; i < 60; i++) {
             partida.avanzarTick();

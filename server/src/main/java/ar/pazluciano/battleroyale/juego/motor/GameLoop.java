@@ -1,9 +1,14 @@
 package ar.pazluciano.battleroyale.juego.motor;
 
 import ar.pazluciano.battleroyale.comun.config.ConfiguracionJuego;
-import ar.pazluciano.battleroyale.juego.dominio.combate.EventoKill;
+import ar.pazluciano.battleroyale.juego.dominio.partida.EventoDominio;
+import ar.pazluciano.battleroyale.juego.dominio.partida.EventoFinPartida;
+import ar.pazluciano.battleroyale.juego.dominio.partida.EventoKill;
+import ar.pazluciano.battleroyale.juego.dominio.partida.EventoMuerteZona;
+import ar.pazluciano.battleroyale.juego.dominio.partida.EventoRecogido;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Jugador;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Partida;
+import ar.pazluciano.battleroyale.juego.dominio.partida.ResultadoFinal;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Vector2;
 import ar.pazluciano.battleroyale.juego.protocolo.Bienvenida;
 import ar.pazluciano.battleroyale.juego.protocolo.ConfigBienvenida;
@@ -14,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -125,21 +131,43 @@ public class GameLoop {
     }
 
     /** Emite los eventos acumulados DESPUES del snapshot (R22): el cliente nunca ve un KILL de un
-     *  estado que todavia no vio. */
+     *  estado que todavia no vio. Conjunto cerrado (sealed): switch exhaustivo, sin default. */
     private void emitirEventos() {
-        for (EventoKill kill : partida.drenarEventos()) {
-            emisor.emitir(aEvento(kill));
+        for (EventoDominio evento : partida.drenarEventos()) {
+            emisor.emitir(aEvento(evento));
         }
     }
 
-    private Evento aEvento(EventoKill kill) {
-        return Evento.builder()
-                .evento("KILL")
-                .datos(Map.of(
-                        "asesino", kill.getIdAsesino(),
-                        "victima", kill.getIdVictima(),
-                        "arma", kill.getArma().name()))
-                .build();
+    private Evento aEvento(EventoDominio evento) {
+        return switch (evento) {
+            case EventoKill kill -> Evento.builder()
+                    .evento("KILL")
+                    .datos(Map.of(
+                            "asesino", kill.getIdAsesino(),
+                            "victima", kill.getIdVictima(),
+                            "arma", kill.getArma().name()))
+                    .build();
+            case EventoRecogido recogido -> Evento.builder()
+                    .evento("RECOGIDO")
+                    .datos(Map.of(
+                            "jugador", recogido.getIdJugador(),
+                            "botin", String.valueOf(recogido.getIdBotin()),
+                            "tipo", recogido.getTipo().name()))
+                    .build();
+            case EventoMuerteZona muerteZona -> Evento.builder()
+                    .evento("MUERTE_ZONA")
+                    .datos(Map.of("victima", muerteZona.getIdVictima()))
+                    .build();
+            case EventoFinPartida finPartida -> aEventoFinPartida(finPartida.getResultado());
+        };
+    }
+
+    private Evento aEventoFinPartida(ResultadoFinal resultado) {
+        Map<String, String> datos = new HashMap<>();
+        datos.put("ganador", resultado.getIdGanador());
+        resultado.getKillsPorJugador()
+                .forEach((idJugador, kills) -> datos.put("kills_" + idJugador, String.valueOf(kills)));
+        return Evento.builder().evento("FIN_PARTIDA").datos(datos).build();
     }
 
     /**
@@ -186,7 +214,8 @@ public class GameLoop {
     private void aplicarInput(ComandoInput comando) {
         Input input = comando.getInput();
         Vector2 mover = aVector2(input.getMover());
-        partida.aplicarInput(comando.getIdJugador(), input.getSec(), mover, input.getApuntar(), input.isDisparar());
+        partida.aplicarInput(comando.getIdJugador(), input.getSec(), mover, input.getApuntar(),
+                input.isDisparar(), input.getAcciones());
     }
 
     private int ordenUnionDe(String idJugador) {

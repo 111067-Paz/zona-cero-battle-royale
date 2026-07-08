@@ -6,7 +6,9 @@ import ar.pazluciano.battleroyale.juego.dominio.bots.FabricaExplorador;
 import ar.pazluciano.battleroyale.juego.dominio.bots.FabricaFrancotirador;
 import ar.pazluciano.battleroyale.juego.dominio.mapa.MapaJuego;
 import ar.pazluciano.battleroyale.juego.dominio.participante.FabricaParticipante;
+import ar.pazluciano.battleroyale.juego.dominio.partida.ParametrosCiclo;
 import ar.pazluciano.battleroyale.juego.dominio.partida.ParametrosSimulacion;
+import ar.pazluciano.battleroyale.juego.dominio.partida.ParametrosZona;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Partida;
 import ar.pazluciano.battleroyale.juego.motor.mapa.CargadorMapas;
 import tools.jackson.databind.ObjectMapper;
@@ -73,7 +75,8 @@ public class GestorPartidas {
     private GameLoop crearPartida(long semilla) {
         String idPartida = UUID.randomUUID().toString();
         MapaJuego mapa = cargadorMapas.mapaJuego(ID_MAPA_LOCAL);
-        Partida partida = new Partida(idPartida, mapa, parametrosDesdeConfig(), semilla);
+        Partida partida = new Partida(idPartida, mapa, parametrosDesdeConfig(), cicloDesdeConfig(),
+                zonaDesdeConfig(), semilla);
         agregarBots(partida);
         EmisorPartida emisor = new EmisorPartida(objectMapper);
         GameLoop loop = new GameLoop(partida, config, emisor, new EnsambladorSnapshot());
@@ -100,6 +103,25 @@ public class GestorPartidas {
                 .radioJugador(config.getRadioJugador())
                 .velocidadJugador(config.getVelocidadJugador())
                 .vidaInicial(config.getVida())
+                .build();
+    }
+
+    private ParametrosCiclo cicloDesdeConfig() {
+        return ParametrosCiclo.builder()
+                .lobbyTimeoutTicks(config.lobbyTimeoutTicks())
+                .cuentaRegresivaTicks(config.cuentaRegresivaTicks())
+                .graciaFinTicks(config.graciaFinTicks())
+                .build();
+    }
+
+    private ParametrosZona zonaDesdeConfig() {
+        return ParametrosZona.builder()
+                .radioInicial(config.getZonaRadioInicial())
+                .radioMinimo(config.getZonaRadioMinimo())
+                .cantidadFases(config.getZonaCantidadFases())
+                .ticksContraccion(config.zonaContraccionTicks())
+                .ticksEspera(config.zonaEsperaTicks())
+                .danioPorSegundo(config.getZonaDanioPorSegundo())
                 .build();
     }
 }

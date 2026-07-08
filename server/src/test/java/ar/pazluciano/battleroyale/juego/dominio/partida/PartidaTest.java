@@ -30,12 +30,12 @@ class PartidaTest {
 
     @BeforeEach
     void crearPartida() {
-        partida = new Partida("p-1", mapaSinObstaculos(), parametros(), SEMILLA);
+        partida = new Partida("p-1", mapaSinObstaculos(), parametros(), ciclo(), zonaNeutra(), SEMILLA);
     }
 
     /** Mapa 256x256 sin obstaculos, con dos spawns conocidos para asertar posiciones. */
     private MapaJuego mapaSinObstaculos() {
-        return new MapaJuego("test", 256.0, 256.0, List.of(), List.of(SPAWN_0, SPAWN_1));
+        return new MapaJuego("test", 256.0, 256.0, List.of(), List.of(SPAWN_0, SPAWN_1), List.of());
     }
 
     private ParametrosSimulacion parametros() {
@@ -44,6 +44,19 @@ class PartidaTest {
                 .radioJugador(RADIO)
                 .velocidadJugador(VELOCIDAD)
                 .vidaInicial(VIDA)
+                .build();
+    }
+
+    /** Ciclo instantaneo: estos tests son de mecanica de movimiento, no de la ceremonia de inicio. */
+    private ParametrosCiclo ciclo() {
+        return ParametrosCiclo.builder().lobbyTimeoutTicks(1).cuentaRegresivaTicks(1).graciaFinTicks(1).build();
+    }
+
+    /** Zona sin efecto: radio gigante y sin fases, para no interferir con estos tests. */
+    private ParametrosZona zonaNeutra() {
+        return ParametrosZona.builder()
+                .radioInicial(10_000.0).radioMinimo(10_000.0).cantidadFases(0)
+                .ticksContraccion(1).ticksEspera(999_999).danioPorSegundo(0.0)
                 .build();
     }
 
@@ -61,7 +74,8 @@ class PartidaTest {
     @DisplayName("avanzarTick mueve al jugador segun su intencion, velocidad y dt")
     void avanzarTick_conIntencionHaciaArriba_desplazaLaDistanciaEsperada() {
         Jugador jugador = partida.agregarJugador(ID);
-        partida.aplicarInput(ID, 1L, new Vector2(0.0, -1.0), 0.0, false);
+        partida.forzarInicioInmediato();
+        partida.aplicarInput(ID, 1L, new Vector2(0.0, -1.0), 0.0, false, List.of());
 
         partida.avanzarTick();
 
@@ -73,7 +87,8 @@ class PartidaTest {
     @DisplayName("el jugador nunca atraviesa el borde del mundo (clamp a radio)")
     void avanzarTick_moviendoseAlBordeMuchoTiempo_quedaClampeadoEnElRadio() {
         partida.agregarJugador(ID);
-        partida.aplicarInput(ID, 1L, new Vector2(-1.0, 0.0), 0.0, false);
+        partida.forzarInicioInmediato();
+        partida.aplicarInput(ID, 1L, new Vector2(-1.0, 0.0), 0.0, false, List.of());
 
         for (int i = 0; i < 2000; i++) {
             partida.avanzarTick();
@@ -88,8 +103,8 @@ class PartidaTest {
     void aplicarInput_dosInputsSeguidos_prevaleceElUltimo() {
         Jugador jugador = partida.agregarJugador(ID);
 
-        partida.aplicarInput(ID, 1L, new Vector2(1.0, 0.0), 0.0, false);
-        partida.aplicarInput(ID, 2L, new Vector2(0.0, 1.0), 0.0, false);
+        partida.aplicarInput(ID, 1L, new Vector2(1.0, 0.0), 0.0, false, List.of());
+        partida.aplicarInput(ID, 2L, new Vector2(0.0, 1.0), 0.0, false, List.of());
 
         assertTrue(jugador.getIntencion().getMover().casiIgual(new Vector2(0.0, 1.0)));
         assertEquals(2L, jugador.getUltimaSec());
@@ -99,9 +114,9 @@ class PartidaTest {
     @DisplayName("un input con sec menor o igual a la ultima se descarta en silencio")
     void aplicarInput_secVieja_seDescarta() {
         Jugador jugador = partida.agregarJugador(ID);
-        partida.aplicarInput(ID, 5L, new Vector2(1.0, 0.0), 0.0, false);
+        partida.aplicarInput(ID, 5L, new Vector2(1.0, 0.0), 0.0, false, List.of());
 
-        partida.aplicarInput(ID, 3L, new Vector2(0.0, 1.0), 0.0, false);
+        partida.aplicarInput(ID, 3L, new Vector2(0.0, 1.0), 0.0, false, List.of());
 
         assertTrue(jugador.getIntencion().getMover().casiIgual(new Vector2(1.0, 0.0)));
         assertEquals(5L, jugador.getUltimaSec());

@@ -40,6 +40,9 @@ public class Snapshot {
     /** Tick en que la partida entro en EN_CURSO; deja calcular el TIME del HUD tras reconexion (R27). */
     private long tickInicio;
 
+    /** Ticks que faltan para EN_CURSO; solo presente durante CUENTA_REGRESIVA (R27). */
+    private Integer ticksParaInicio;
+
     /** Ultima {@code sec} procesada por cada jugador. Habilita la prediccion de la Fase 7 (R3). */
     private Map<String, Long> acks;
 
@@ -48,4 +51,10 @@ public class Snapshot {
 
     /** Proyectiles en vuelo, copia por valor. Cada {@code id} es un idRed jamas reciclado (R2). */
     private List<ProyectilSnapshot> proyectiles;
+
+    /** Zona segura; null hasta que la partida entra EN_CURSO. */
+    private ZonaSnapshot zona;
+
+    /** Botin disponible en el mapa, copia por valor. */
+    private List<BotinSnapshot> botines;
 }

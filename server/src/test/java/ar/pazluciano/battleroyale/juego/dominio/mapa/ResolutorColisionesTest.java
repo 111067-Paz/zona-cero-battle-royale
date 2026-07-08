@@ -23,7 +23,7 @@ class ResolutorColisionesTest {
     private MapaJuego mapaConObstaculoCentral() {
         return new MapaJuego("t", 100.0, 100.0,
                 List.of(new ObstaculoAABB(40.0, 40.0, 20.0, 20.0)),
-                List.of(new Vector2(10.0, 10.0)));
+                List.of(new Vector2(10.0, 10.0)), List.of());
     }
 
     @Test

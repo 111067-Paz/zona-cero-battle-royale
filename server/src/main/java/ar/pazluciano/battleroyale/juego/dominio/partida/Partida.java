@@ -1,11 +1,16 @@
 package ar.pazluciano.battleroyale.juego.dominio.partida;
 
+import ar.pazluciano.battleroyale.juego.dominio.botin.Botin;
+import ar.pazluciano.battleroyale.juego.dominio.botin.FabricaBotin;
+import ar.pazluciano.battleroyale.juego.dominio.botin.TipoBotin;
 import ar.pazluciano.battleroyale.juego.dominio.combate.Arma;
 import ar.pazluciano.battleroyale.juego.dominio.combate.ColisionSegmento;
+import ar.pazluciano.battleroyale.juego.dominio.combate.Escopeta;
 import ar.pazluciano.battleroyale.juego.dominio.combate.EspecificacionDisparo;
-import ar.pazluciano.battleroyale.juego.dominio.combate.EventoKill;
 import ar.pazluciano.battleroyale.juego.dominio.combate.ImpactoSegmento;
+import ar.pazluciano.battleroyale.juego.dominio.combate.Pistola;
 import ar.pazluciano.battleroyale.juego.dominio.combate.Proyectil;
+import ar.pazluciano.battleroyale.juego.dominio.combate.Rifle;
 import ar.pazluciano.battleroyale.juego.dominio.combate.TipoArma;
 import ar.pazluciano.battleroyale.juego.dominio.mapa.MapaJuego;
 import ar.pazluciano.battleroyale.juego.dominio.mapa.ObstaculoAABB;
@@ -20,6 +25,7 @@ import lombok.Getter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,22 +38,25 @@ import java.util.Random;
  * pared. Toda su mutacion ocurre en el hilo del loop de su partida, a traves de metodos que reciben
  * argumentos PLANOS. Determinismo total (PLAN §2.7): dt fijo, RNG con semilla, orden estable.
  *
- * <p>Fase 2: sobre el mundo con obstaculos de la Fase 1, agrega COMBATE. Cada tick, en orden: mover
- * jugadores, avanzar proyectiles por segmento (anti-tunneling) resolviendo impactos en orden de
- * {@code idRed}, procesar disparos nuevos (cooldown server-side) y decrementar cooldowns. Los kills se
- * acumulan como {@link EventoKill} para que el motor los emita DESPUES del snapshot (R22).
+ * <p>Fase 4: el ciclo de vida completo, patron State (PLAN §4.3): {@link EnLobby} -&gt;
+ * {@link CuentaRegresiva} -&gt; {@link EnCurso} -&gt; {@link Finalizada}. {@code avanzarTick()} solo
+ * delega al estado actual; toda la logica de "partida jugable" (mover, disparar, zona, botin, acciones)
+ * vive en {@link #ejecutarTickJugable()}, que unicamente {@link EnCurso} invoca.
  */
 @Getter
 public class Partida implements VistaMundo {
 
-    /** Vida maxima de un proyectil sin impactar (tope de seguridad; paredes/bordes lo matan antes). */
     private static final long VIDA_PROYECTIL_TICKS = 120L;
+    private static final double RANGO_RECOGER = 2.0;
 
     private final String id;
     private final MapaJuego mapa;
     private final ParametrosSimulacion params;
+    private final ParametrosCiclo ciclo;
 
-    /** RNG sembrado, fuente de aleatoriedad deterministica (dispersion de escopeta, botin: F4). */
+    @Getter(AccessLevel.NONE)
+    private final ParametrosZona parametrosZona;
+
     @Getter(AccessLevel.NONE)
     private final Random rng;
 
@@ -56,6 +65,9 @@ public class Partida implements VistaMundo {
 
     @Getter(AccessLevel.NONE)
     private final ColisionSegmento colisionSegmento = new ColisionSegmento();
+
+    @Getter(AccessLevel.NONE)
+    private final FabricaBotin fabricaBotin = new FabricaBotin();
 
     /** LinkedHashMap: lookup O(1) por id + iteracion en orden de insercion (determinismo). */
     private final Map<String, Jugador> jugadores = new LinkedHashMap<>();
@@ -68,23 +80,67 @@ public class Partida implements VistaMundo {
     @Getter(AccessLevel.NONE)
     private final List<Proyectil> proyectiles = new ArrayList<>();
 
+    /** Botin en el mapa, poblado al entrar EN_CURSO. */
     @Getter(AccessLevel.NONE)
-    private final List<EventoKill> eventosPendientes = new ArrayList<>();
+    private final List<Botin> botines = new ArrayList<>();
 
-    private final EstadoPartida estado = EstadoPartida.EN_CURSO;
-    private final long tickInicio = 0L;
+    @Getter(AccessLevel.NONE)
+    private final List<EventoDominio> eventosPendientes = new ArrayList<>();
+
+    /** HP de cada jugador al INICIO del tick jugable: primer criterio de desempate (§8.3). */
+    @Getter(AccessLevel.NONE)
+    private final Map<String, Integer> hpAlInicioTick = new LinkedHashMap<>();
+
+    @Getter(AccessLevel.NONE)
+    private EstadoDePartida estadoActual = new EnLobby();
+
+    /** Zona segura: null hasta que {@link #iniciarEnCurso()} la crea. */
+    private ZonaSegura zona;
+
+    private ResultadoFinal resultadoFinal;
 
     private long tick = 0L;
+    private long tickInicio = 0L;
     private int proximoOrdenUnion = 0;
 
     @Getter(AccessLevel.NONE)
     private long contadorIdRed = 0L;
 
-    public Partida(String id, MapaJuego mapa, ParametrosSimulacion params, long semilla) {
+    @Getter(AccessLevel.NONE)
+    private long contadorIdBotin = 0L;
+
+    public Partida(String id, MapaJuego mapa, ParametrosSimulacion params, ParametrosCiclo ciclo,
+                   ParametrosZona parametrosZona, long semilla) {
         this.id = id;
         this.mapa = mapa;
         this.params = params;
+        this.ciclo = ciclo;
+        this.parametrosZona = parametrosZona;
         this.rng = new Random(semilla);
+    }
+
+    /** Estado (enum) para el snapshot (R27). */
+    public EstadoPartida getEstado() {
+        return estadoActual.tipo();
+    }
+
+    /** Estado (objeto) para introspeccion — tests y el motor lo usan para casos especificos. */
+    public EstadoDePartida estadoActual() {
+        return estadoActual;
+    }
+
+    /** Ticks que faltan para EN_CURSO, solo presente durante CUENTA_REGRESIVA (R27). */
+    public Optional<Integer> ticksParaInicio() {
+        if (estadoActual instanceof CuentaRegresiva cuentaRegresiva) {
+            return Optional.of(cuentaRegresiva.getTicksRestantes());
+        }
+        return Optional.empty();
+    }
+
+    /** True cuando la gracia de FINALIZADA se cumplio: el GestorPartidas puede desregistrar (§7-F). */
+    public boolean graciaCumplida() {
+        return estadoActual instanceof Finalizada finalizada
+                && finalizada.getTicksTranscurridos() >= ciclo.getGraciaFinTicks();
     }
 
     /** Alta de un HUMANO: usa la {@link FabricaHumano} (Pistola + Null Object, R17). */
@@ -115,20 +171,28 @@ public class Partida implements VistaMundo {
         return Optional.ofNullable(jugadores.get(idJugador));
     }
 
-    public void aplicarInput(String idJugador, long sec, Vector2 mover, double apuntar, boolean disparar) {
+    public void aplicarInput(String idJugador, long sec, Vector2 mover, double apuntar, boolean disparar,
+                             List<AccionJugador> acciones) {
         Jugador jugador = jugadores.get(idJugador);
         if (jugador == null) {
             return;
         }
-        jugador.aplicarInput(sec, mover, apuntar, disparar);
+        jugador.aplicarInput(sec, mover, apuntar, disparar, acciones);
+    }
+
+    /** Un paso fijo del RELOJ de la partida: delega TODO al estado actual (State, §4.3). */
+    public void avanzarTick() {
+        estadoActual = estadoActual.procesarTick(this);
+        tick++;
     }
 
     /**
-     * Avanza la simulacion un paso fijo {@code dt}, en orden determinista: mueve a los VIVOS, avanza
-     * los proyectiles existentes (resolviendo impactos), procesa los disparos nuevos (que aparecen en
-     * la boca del arma y recien se mueven el proximo tick) y decrementa cooldowns.
+     * Todo lo que hace un tick EN_CURSO, en el orden del PLAN §7-C/§7-E: pensar participantes, mover,
+     * avanzar proyectiles, procesar disparos, decrementar cooldowns, tickear la zona (dano fraccional)
+     * y consumir las acciones one-shot (RECOGER/USAR_BOTIQUIN). Solo lo invoca {@link EnCurso}.
      */
-    public void avanzarTick() {
+    void ejecutarTickJugable() {
+        capturarHpAlInicioDelTick();
         pensarParticipantes();
         for (Jugador jugador : jugadores.values()) {
             if (jugador.estaVivo()) {
@@ -138,7 +202,46 @@ public class Partida implements VistaMundo {
         avanzarProyectiles();
         procesarDisparos();
         decrementarCooldowns();
-        tick++;
+        tickearZona();
+        procesarAcciones();
+    }
+
+    /** Marca el inicio real de EN_CURSO, crea la zona y puebla el botin. Solo lo invoca {@link CuentaRegresiva}. */
+    void iniciarEnCurso() {
+        tickInicio = tick;
+        Vector2 centroMapa = new Vector2(mapa.getAncho() / 2.0, mapa.getAlto() / 2.0);
+        zona = new ZonaSegura(parametrosZona, centroMapa);
+        poblarBotines();
+    }
+
+    /** Arma el resultado y encola el evento de fin. Solo lo invoca {@link EnCurso}. */
+    void finalizar(ResultadoFinal resultado) {
+        this.resultadoFinal = resultado;
+        eventosPendientes.add(new EventoFinPartida(resultado));
+    }
+
+    /**
+     * SOLO PARA TESTS: agrega un botin exacto (tipo controlado), sin pasar por la fabrica aleatoria.
+     * Los tests de RECOGER necesitan un tipo determinado, no lo que salga del RNG.
+     */
+    void agregarBotinDeTest(Botin botin) {
+        botines.add(botin);
+    }
+
+    /**
+     * SOLO PARA TESTS: salta lobby y cuenta regresiva, arranca directo EN_CURSO. Los tests de mecanica
+     * de juego (movimiento, combate, bots) no necesitan simular la ceremonia de inicio.
+     */
+    void forzarInicioInmediato() {
+        iniciarEnCurso();
+        this.estadoActual = new EnCurso();
+    }
+
+    private void capturarHpAlInicioDelTick() {
+        hpAlInicioTick.clear();
+        for (Jugador jugador : jugadores.values()) {
+            hpAlInicioTick.put(jugador.getId(), jugador.getHp());
+        }
     }
 
     /**
@@ -166,11 +269,6 @@ public class Partida implements VistaMundo {
         jugador.apuntarA(jugador.getIntencion().getApuntar());
     }
 
-    /**
-     * Avanza cada proyectil su segmento del tick, en orden de idRed. Recorta contra obstaculos y
-     * jugadores VIVOS (conectados o no, R26) excepto el dueno; el impacto mas cercano decide. Los
-     * proyectiles que impactan, expiran o salen del mapa se quitan.
-     */
     private void avanzarProyectiles() {
         double radio = params.getRadioJugador();
         List<ObstaculoAABB> obstaculos = mapa.getObstaculos();
@@ -236,6 +334,79 @@ public class Partida implements VistaMundo {
         }
     }
 
+    /** Avanza el cronograma de la zona y aplica su dano fraccional a quien esta fuera (§7-E). */
+    private void tickearZona() {
+        if (zona == null) {
+            return;
+        }
+        zona.avanzarTick();
+        for (Jugador jugador : jugadores.values()) {
+            if (!jugador.estaVivo() || zona.contiene(jugador.getPosicion())) {
+                continue;
+            }
+            jugador.aplicarDanioZonaFraccional(parametrosZona.getDanioPorSegundo(), params.getDt());
+            if (!jugador.estaVivo()) {
+                eventosPendientes.add(new EventoMuerteZona(jugador.getId()));
+            }
+        }
+    }
+
+    /** Consume las acciones one-shot encoladas por cada jugador (RECOGER, USAR_BOTIQUIN). */
+    private void procesarAcciones() {
+        for (Jugador jugador : jugadores.values()) {
+            List<AccionJugador> acciones = jugador.drenarAcciones();
+            if (!jugador.estaVivo()) {
+                continue;
+            }
+            for (AccionJugador accion : acciones) {
+                switch (accion) {
+                    case RECOGER -> procesarRecoger(jugador);
+                    case USAR_BOTIQUIN -> jugador.usarBotiquin();
+                }
+            }
+        }
+    }
+
+    private void procesarRecoger(Jugador jugador) {
+        botinMasCercanoEnRango(jugador).ifPresent(botin -> {
+            boolean aplicado = botin.esBotiquin() ? jugador.sumarBotiquin() : equiparDesdeBotin(jugador, botin);
+            if (aplicado) {
+                botin.marcarRecogido();
+                eventosPendientes.add(new EventoRecogido(jugador.getId(), botin.getId(), botin.getTipo()));
+            }
+        });
+    }
+
+    private boolean equiparDesdeBotin(Jugador jugador, Botin botin) {
+        jugador.equipar(armaDesde(botin.getTipo()));
+        return true;
+    }
+
+    private Arma armaDesde(TipoBotin tipo) {
+        return switch (tipo) {
+            case PISTOLA -> new Pistola();
+            case ESCOPETA -> new Escopeta();
+            case RIFLE -> new Rifle();
+            case BOTIQUIN -> throw new IllegalStateException("BOTIQUIN no es un arma");
+        };
+    }
+
+    /** Botin disponible mas cercano en rango; empate -> menor id (R15), igual criterio que RECOGER. */
+    private Optional<Botin> botinMasCercanoEnRango(Jugador jugador) {
+        return botines.stream()
+                .filter(Botin::isDisponible)
+                .filter(botin -> distancia(botin.getPosicion(), jugador.getPosicion()) <= RANGO_RECOGER)
+                .min(Comparator
+                        .comparingDouble((Botin botin) -> distancia(botin.getPosicion(), jugador.getPosicion()))
+                        .thenComparingLong(Botin::getId));
+    }
+
+    private void poblarBotines() {
+        for (Vector2 punto : mapa.getSpawnsBotin()) {
+            botines.add(fabricaBotin.crear(contadorIdBotin++, punto, rng));
+        }
+    }
+
     /** VistaMundo: jugadores VIVOS distintos del propio (conectados o no, R26). Reusado por combate y bots. */
     @Override
     public List<Jugador> rivalesVivos(String idPropio) {
@@ -254,9 +425,45 @@ public class Partida implements VistaMundo {
         return !colisionSegmento.primerImpacto(desde, hasta, mapa.getObstaculos(), List.of(), 0.0).huboImpacto();
     }
 
+    /**
+     * Queda 1 vivo -> gana. Queda 0 vivos -> empate por: 1) mayor HP al inicio del tick, 2) mas kills,
+     * 3) orden de union mas bajo (§8.3). Con 1 solo participante no hay "batalla" que resolver.
+     */
+    Optional<ResultadoFinal> evaluarVictoria() {
+        if (jugadores.size() <= 1) {
+            return Optional.empty();
+        }
+        List<Jugador> vivos = jugadores.values().stream().filter(Jugador::estaVivo).toList();
+        if (vivos.size() == 1) {
+            return Optional.of(construirResultado(vivos.get(0).getId()));
+        }
+        if (vivos.isEmpty()) {
+            Jugador ganador = jugadores.values().stream()
+                    .max(Comparator
+                            .comparingInt((Jugador j) -> hpAlInicioTick.getOrDefault(j.getId(), 0))
+                            .thenComparingInt(Jugador::getKills)
+                            .thenComparingInt(j -> -j.getOrdenUnion()))
+                    .orElseThrow();
+            return Optional.of(construirResultado(ganador.getId()));
+        }
+        return Optional.empty();
+    }
+
+    private ResultadoFinal construirResultado(String idGanador) {
+        Map<String, Integer> kills = new LinkedHashMap<>();
+        for (Jugador jugador : jugadores.values()) {
+            kills.put(jugador.getId(), jugador.getKills());
+        }
+        return new ResultadoFinal(idGanador, kills);
+    }
+
     private boolean fueraDeMapa(Vector2 posicion) {
         return posicion.getX() < 0 || posicion.getX() > mapa.getAncho()
                 || posicion.getY() < 0 || posicion.getY() > mapa.getAlto();
+    }
+
+    private double distancia(Vector2 a, Vector2 b) {
+        return Math.hypot(a.getX() - b.getX(), a.getY() - b.getY());
     }
 
     /** Vista de solo lectura de los jugadores, en orden determinista, para construir el snapshot. */
@@ -269,9 +476,14 @@ public class Partida implements VistaMundo {
         return Collections.unmodifiableList(proyectiles);
     }
 
+    /** Vista de solo lectura del botin en el mapa, para construir el snapshot. */
+    public List<Botin> botinesVisibles() {
+        return Collections.unmodifiableList(botines);
+    }
+
     /** Devuelve y limpia los eventos acumulados en el tick. El motor los emite DESPUES del snapshot. */
-    public List<EventoKill> drenarEventos() {
-        List<EventoKill> copia = new ArrayList<>(eventosPendientes);
+    public List<EventoDominio> drenarEventos() {
+        List<EventoDominio> copia = new ArrayList<>(eventosPendientes);
         eventosPendientes.clear();
         return copia;
     }
