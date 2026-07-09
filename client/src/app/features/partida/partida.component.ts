@@ -5,10 +5,12 @@ import {
   ElementRef,
   inject,
   OnDestroy,
+  signal,
   viewChild,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
+import { Mapa } from '../../models/mapa';
 import { MensajeServidor, VERSION_PROTOCOLO } from '../../models/protocolo';
 import { ConexionPartidaService } from './conexion-partida.service';
 import { EntradaService } from './entrada.service';
@@ -16,9 +18,14 @@ import { EstadoPartidaStore } from './estado-partida.store';
 import { HudComponent } from './hud.component';
 import { MapaService } from './mapa.service';
 import { OverlayEstadoComponent } from './overlay-estado.component';
+import { RendererIsometrico } from './render/renderer-isometrico';
 import { RendererJuego } from './render/renderer-juego';
 import { RendererTopDown2D } from './render/renderer-top-down-2d';
 import { TicketService } from './ticket.service';
+
+type ModoRenderer = 'top-down' | 'isometrico';
+
+const CLAVE_RENDERER = 'zc.renderer';
 
 /**
  * Raiz de composicion del feature de partida (PLAN §7-B/§7-C). Es el UNICO punto que conecta las
@@ -28,6 +35,10 @@ import { TicketService } from './ticket.service';
  * <p>Flujo: inicia el renderer -> se suscribe al stream tipado -> al abrir el socket reinicia la
  * secuencia y envia UNIRSE -> arranca el sampler de entrada -> corre un rAF que pide el estado
  * interpolado al store y se lo pasa al renderer.
+ *
+ * <p>Fase 8 (Bridge): la implementacion del renderer se elige aca (localStorage) y se puede
+ * alternar EN CALIENTE con el boton 2D/ISO — se destruye una, se inicia la otra sobre el mismo
+ * canvas y se le re-fija el mapa cacheado. Store, conexion y entrada no se enteran.
  */
 @Component({
   selector: 'app-partida',
@@ -44,6 +55,14 @@ import { TicketService } from './ticket.service';
           {{ estadoConexion() }}
         </span>
         <span class="pista">WASD moverte · mouse apuntar · click disparar</span>
+        <button
+          type="button"
+          class="alternar-vista"
+          (click)="alternarRenderer()"
+          [disabled]="cambiandoRenderer()"
+        >
+          VISTA: {{ modoRenderer() === 'top-down' ? '2D' : 'ISO' }}
+        </button>
       </div>
     </div>
   `,
@@ -81,6 +100,21 @@ import { TicketService } from './ticket.service';
       .estado--ok {
         color: var(--color-health-lime);
       }
+      .alternar-vista {
+        border: 3px solid var(--color-thick-border);
+        border-radius: 10px;
+        padding: 4px 10px;
+        background: var(--grad-play-button);
+        color: #111424;
+        text-transform: uppercase;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .alternar-vista:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
     `,
   ],
 })
@@ -94,12 +128,19 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
   private readonly router = inject(Router);
 
   private readonly lienzo = viewChild.required<ElementRef<HTMLCanvasElement>>('lienzo');
-  private readonly renderer: RendererJuego = new RendererTopDown2D();
+  private renderer: RendererJuego;
+  private mapaActual: Mapa | null = null;
   private readonly suscripciones: Subscription[] = [];
   private rafId = 0;
   private idPartida = '';
 
   readonly estadoConexion = this.conexion.estado;
+  readonly modoRenderer = signal<ModoRenderer>(this.leerModoGuardado());
+  readonly cambiandoRenderer = signal(false);
+
+  constructor() {
+    this.renderer = this.crearRenderer(this.modoRenderer());
+  }
 
   async ngAfterViewInit(): Promise<void> {
     const idPartida = this.route.snapshot.queryParamMap.get('idPartida');
@@ -163,10 +204,42 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
   private cargarMapa(idMapa: string): void {
     this.suscripciones.push(
       this.mapaService.obtener(idMapa).subscribe((mapa) => {
+        this.mapaActual = mapa; // cacheado para re-fijarlo al alternar de renderer (F8)
         this.renderer.establecerMapa(mapa);
         this.store.establecerMapa(mapa); // la prediccion (F7) necesita los obstaculos para colisionar
       }),
     );
+  }
+
+  /**
+   * Alterna top-down <-> isometrico EN CALIENTE (F8, la prueba del Bridge): destruye el renderer
+   * actual, inicia el otro sobre el MISMO canvas y le re-fija el mapa. El rAF sigue corriendo
+   * (renderizar() de un renderer sin iniciar es un no-op seguro); store/conexion/entrada, intactos.
+   */
+  async alternarRenderer(): Promise<void> {
+    if (this.cambiandoRenderer()) {
+      return;
+    }
+    this.cambiandoRenderer.set(true);
+    const nuevoModo: ModoRenderer = this.modoRenderer() === 'top-down' ? 'isometrico' : 'top-down';
+    this.renderer.destruir();
+    const nuevoRenderer = this.crearRenderer(nuevoModo);
+    await nuevoRenderer.iniciar(this.lienzo().nativeElement);
+    if (this.mapaActual !== null) {
+      nuevoRenderer.establecerMapa(this.mapaActual);
+    }
+    this.renderer = nuevoRenderer;
+    this.modoRenderer.set(nuevoModo);
+    localStorage.setItem(CLAVE_RENDERER, nuevoModo);
+    this.cambiandoRenderer.set(false);
+  }
+
+  private crearRenderer(modo: ModoRenderer): RendererJuego {
+    return modo === 'isometrico' ? new RendererIsometrico() : new RendererTopDown2D();
+  }
+
+  private leerModoGuardado(): ModoRenderer {
+    return localStorage.getItem(CLAVE_RENDERER) === 'isometrico' ? 'isometrico' : 'top-down';
   }
 
   private readonly bucleRender = (): void => {
