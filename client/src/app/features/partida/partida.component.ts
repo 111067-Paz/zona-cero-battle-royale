@@ -118,7 +118,10 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
     );
 
     this.conexion.conectar();
-    this.entrada.iniciar(canvas, (input) => this.conexion.enviar(input));
+    this.entrada.iniciar(canvas, (input) => {
+      this.conexion.enviar(input);
+      this.store.aplicarInputLocal(input); // prediccion inmediata del movimiento propio (F7)
+    });
     this.bucleRender();
   }
 
@@ -159,7 +162,10 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
 
   private cargarMapa(idMapa: string): void {
     this.suscripciones.push(
-      this.mapaService.obtener(idMapa).subscribe((mapa) => this.renderer.establecerMapa(mapa)),
+      this.mapaService.obtener(idMapa).subscribe((mapa) => {
+        this.renderer.establecerMapa(mapa);
+        this.store.establecerMapa(mapa); // la prediccion (F7) necesita los obstaculos para colisionar
+      }),
     );
   }
 

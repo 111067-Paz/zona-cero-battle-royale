@@ -20,4 +20,8 @@ public class ConfigBienvenida {
     private int snapshotRate;
     private int mundo;
     private double velocidad;
+
+    /** Radio de colision del jugador (F7): la base de la prediccion client-side lo necesita para
+     *  correr LA MISMA resolucion de colisiones que el servidor (§8.6). */
+    private double radioJugador;
 }

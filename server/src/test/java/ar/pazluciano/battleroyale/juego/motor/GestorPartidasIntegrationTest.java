@@ -10,6 +10,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,7 +50,7 @@ class GestorPartidasIntegrationTest {
 
     @Test
     @DisplayName("limpiarPartidasFinalizadas desregistra SOLO las partidas con gracia cumplida")
-    void limpiarPartidasFinalizadas_conGraciaCumplida_desregistraSoloEsas() {
+    void limpiarPartidasFinalizadas_conGraciaCumplida_desregistraSoloEsas() throws InterruptedException {
         // GIVEN
         GameLoop finalizada = gestorPartidas.crearPartida(List.of());
         GameLoop enCurso = gestorPartidas.crearPartida(List.of());
@@ -66,7 +68,7 @@ class GestorPartidasIntegrationTest {
 
     @Test
     @DisplayName("higiene (R12): crear y terminar 50 partidas deja el mapa de loops en cero residuos")
-    void limpiarPartidasFinalizadas_con50Partidas_dejaCeroResiduos() {
+    void limpiarPartidasFinalizadas_con50Partidas_dejaCeroResiduos() throws InterruptedException {
         // GIVEN
         List<GameLoop> loops = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
@@ -84,8 +86,18 @@ class GestorPartidasIntegrationTest {
         }
     }
 
-    /** Salta la simulacion real (que tardaria minutos): fuerza el estado que graciaCumplida() lee. */
-    private void forzarGraciaCumplida(GameLoop loop) {
+    /**
+     * Salta la simulacion real (que tardaria minutos): fuerza el estado que graciaCumplida() lee.
+     * ANTES de tocar {@code estadoActual} apaga el executor del loop y ESPERA su terminacion —
+     * un tick en vuelo que leyo el estado viejo lo escribiria de vuelta despues de la inyeccion
+     * (estadoActual = estadoActual.procesarTick(this)), pisandola. Sin hilo vivo, no hay carrera.
+     */
+    private void forzarGraciaCumplida(GameLoop loop) throws InterruptedException {
+        ScheduledExecutorService executor =
+                (ScheduledExecutorService) ReflectionTestUtils.getField(loop, "executor");
+        executor.shutdown();
+        assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS),
+                "el hilo del loop deberia terminar en menos de 2s");
         Object partida = ReflectionTestUtils.getField(loop, "partida");
         Finalizada finalizada = new Finalizada();
         ReflectionTestUtils.setField(finalizada, "ticksTranscurridos", Integer.MAX_VALUE);

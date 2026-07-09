@@ -7,7 +7,8 @@
     "tickRate": 30,
     "snapshotRate": 15,
     "mundo": 256,
-    "velocidad": 5.0
+    "velocidad": 5.0,
+    "radioJugador": 0.5
   },
   "idMapa": "campo-01"
 }

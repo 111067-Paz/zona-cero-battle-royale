@@ -322,6 +322,7 @@ public class GameLoop {
                 .snapshotRate(config.getSnapshotRate())
                 .mundo(config.getMundo())
                 .velocidad(config.getVelocidadJugador())
+                .radioJugador(config.getRadioJugador())
                 .build();
         return Bienvenida.builder()
                 .idJugador(idJugador)

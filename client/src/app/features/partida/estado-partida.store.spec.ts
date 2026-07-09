@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Evento, JugadorSnapshot, ProyectilSnapshot, Snapshot } from '../../models/protocolo';
+import { Mapa } from '../../models/mapa';
+import { ConfigBienvenida, Evento, Input, JugadorSnapshot, ProyectilSnapshot, Snapshot } from '../../models/protocolo';
 import { EstadoPartidaStore } from './estado-partida.store';
 
-function jugador(id: string, x: number, y: number, angulo = 0, hp = 100): JugadorSnapshot {
+function jugador(
+  id: string,
+  x: number,
+  y: number,
+  angulo = 0,
+  hp = 100,
+  estadoVida: 'VIVO' | 'MUERTO' = 'VIVO',
+): JugadorSnapshot {
   return {
-    id, x, y, angulo, hp, estadoVida: 'VIVO', conectado: true, arma: 'PISTOLA', kills: 0, botiquines: 0,
+    id, x, y, angulo, hp, estadoVida, conectado: true, arma: 'PISTOLA', kills: 0, botiquines: 0,
   };
 }
 
@@ -12,11 +20,19 @@ function snapshot(
   tick: number,
   jugadores: JugadorSnapshot[],
   proyectiles: ProyectilSnapshot[] = [],
+  acks: Record<string, number> = {},
 ): Snapshot {
   return {
-    v: 1, tipo: 'SNAPSHOT', tick, estado: 'EN_CURSO', tickInicio: 0, ticksParaInicio: null, acks: {},
+    v: 1, tipo: 'SNAPSHOT', tick, estado: 'EN_CURSO', tickInicio: 0, ticksParaInicio: null, acks,
     jugadores, proyectiles, zona: null, botines: [],
   };
+}
+
+const CONFIG: ConfigBienvenida = { tickRate: 30, snapshotRate: 15, mundo: 100, velocidad: 5, radioJugador: 0.5 };
+const MAPA_SIN_OBSTACULOS: Mapa = { id: 'test', ancho: 100, alto: 100, obstaculos: [], decoraciones: [] };
+
+function input(sec: number, moverX: number, moverY: number, apuntar = 0): Input {
+  return { v: 1, tipo: 'INPUT', sec, mover: { x: moverX, y: moverY }, apuntar, disparar: false, acciones: [] };
 }
 
 describe('EstadoPartidaStore', () => {
@@ -113,6 +129,121 @@ describe('EstadoPartidaStore', () => {
     const nuevo = estado!.proyectiles.find((p) => p.id === 2)!;
     expect(conocido.x).toBeCloseTo(4, 5); // interpolado a t=0.5
     expect(nuevo.x).toBe(50); // nuevo -> snap
+  });
+
+  describe('Prediccion y reconciliacion del movimiento propio (F7)', () => {
+    const BASE_X = 50;
+    const BASE_Y = 50;
+    const DT = 1 / CONFIG.tickRate;
+
+    function conectar(idJugador = 'j-1'): void {
+      store.aplicarBienvenida({ v: 1, tipo: 'BIENVENIDA', idJugador, idPartida: 'p-1', config: CONFIG, idMapa: 'test' });
+      store.establecerMapa(MAPA_SIN_OBSTACULOS);
+    }
+
+    it('predice la posicion propia al instante, sin esperar el snapshot', () => {
+      conectar();
+      tiempo = 1000;
+      store.aplicarSnapshot(snapshot(1, [jugador('j-1', BASE_X, BASE_Y)]));
+
+      store.aplicarInputLocal(input(1, 1, 0));
+
+      const yo = store.estadoVisual(1000)!.jugadores.find((j) => j.id === 'j-1')!;
+      expect(yo.x).toBeCloseTo(BASE_X + CONFIG.velocidad * DT, 6);
+      expect(yo.y).toBeCloseTo(BASE_Y, 6);
+    });
+
+    it('el angulo propio sigue al ultimo input enviado, sin esperar el viaje de ida y vuelta', () => {
+      conectar();
+      tiempo = 1000;
+      store.aplicarSnapshot(snapshot(1, [jugador('j-1', BASE_X, BASE_Y)]));
+
+      store.aplicarInputLocal(input(1, 0, 0, 1.57));
+
+      const yo = store.estadoVisual(1000)!.jugadores.find((j) => j.id === 'j-1')!;
+      expect(yo.angulo).toBeCloseTo(1.57, 5);
+    });
+
+    it('sin mispredicción, la reconciliacion reproduce exactamente lo ya predicho (sin offset)', () => {
+      conectar();
+      tiempo = 1000;
+      store.aplicarSnapshot(snapshot(1, [jugador('j-1', BASE_X, BASE_Y)]));
+      store.aplicarInputLocal(input(1, 1, 0));
+      const xPredicho = BASE_X + CONFIG.velocidad * DT;
+
+      tiempo = 1050;
+      store.aplicarSnapshot(snapshot(2, [jugador('j-1', xPredicho, BASE_Y)], [], { 'j-1': 1 }));
+
+      const yo = store.estadoVisual(1050)!.jugadores.find((j) => j.id === 'j-1')!;
+      expect(yo.x).toBeCloseTo(xPredicho, 6);
+    });
+
+    it('una mispredicción chica se absorbe de a poco (converge, no salta de golpe)', () => {
+      conectar();
+      tiempo = 1000;
+      store.aplicarSnapshot(snapshot(1, [jugador('j-1', BASE_X, BASE_Y)]));
+      store.aplicarInputLocal(input(1, 1, 0));
+
+      // El servidor confirma una posicion LIGERAMENTE distinta a la predicha.
+      tiempo = 1050;
+      store.aplicarSnapshot(snapshot(2, [jugador('j-1', BASE_X + 0.1, BASE_Y)], [], { 'j-1': 1 }));
+
+      const primerFrame = store.estadoVisual(1050)!.jugadores.find((j) => j.id === 'j-1')!;
+      const segundoFrame = store.estadoVisual(1051)!.jugadores.find((j) => j.id === 'j-1')!;
+      const objetivo = BASE_X + CONFIG.velocidad * DT; // lo que ya se venia mostrando
+
+      expect(Math.abs(primerFrame.x - objetivo)).toBeGreaterThan(0); // no cae de golpe al valor reconciliado
+      expect(Math.abs(segundoFrame.x - objetivo)).toBeLessThan(Math.abs(primerFrame.x - objetivo)); // converge
+    });
+
+    it('una mispredicción grande (teleport/respawn) se cae directo, sin arrastre', () => {
+      conectar();
+      tiempo = 1000;
+      store.aplicarSnapshot(snapshot(1, [jugador('j-1', BASE_X, BASE_Y)]));
+      store.aplicarInputLocal(input(1, 1, 0));
+
+      tiempo = 1050;
+      store.aplicarSnapshot(snapshot(2, [jugador('j-1', 10, 10)], [], { 'j-1': 1 }));
+
+      const yo = store.estadoVisual(1050)!.jugadores.find((j) => j.id === 'j-1')!;
+      expect(yo.x).toBeCloseTo(10, 6);
+      expect(yo.y).toBeCloseTo(10, 6);
+    });
+
+    it('un jugador propio MUERTO deja de predecirse y muestra la posicion del servidor', () => {
+      conectar();
+      tiempo = 1000;
+      store.aplicarSnapshot(snapshot(1, [jugador('j-1', BASE_X, BASE_Y)]));
+      store.aplicarInputLocal(input(1, 1, 0));
+
+      tiempo = 1050;
+      store.aplicarSnapshot(snapshot(2, [jugador('j-1', 5, 5, 0, 0, 'MUERTO')], [], { 'j-1': 1 }));
+
+      const yo = store.estadoVisual(1050)!.jugadores.find((j) => j.id === 'j-1')!;
+      expect(yo.x).toBeCloseTo(5, 6);
+      expect(yo.y).toBeCloseTo(5, 6);
+    });
+
+    it('calcula el RTT desde cuando se mando la sec hasta que llego su ack, sin protocolo nuevo', () => {
+      conectar();
+      tiempo = 1000;
+      store.aplicarSnapshot(snapshot(1, [jugador('j-1', BASE_X, BASE_Y)]));
+      tiempo = 1005;
+      store.aplicarInputLocal(input(1, 1, 0));
+
+      tiempo = 1145; // 140ms despues de haber mandado la sec 1
+      store.aplicarSnapshot(snapshot(2, [jugador('j-1', BASE_X + 0.1, BASE_Y)], [], { 'j-1': 1 }));
+
+      expect(store.rttMs()).toBe(140);
+    });
+
+    it('sin ack todavia para el jugador propio, el RTT queda null', () => {
+      conectar();
+      tiempo = 1000;
+      store.aplicarSnapshot(snapshot(1, [jugador('j-1', BASE_X, BASE_Y)]));
+
+      expect(store.rttMs()).toBeNull();
+    });
   });
 });
 

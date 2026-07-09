@@ -12,6 +12,10 @@ export type EstadoConexion = 'desconectado' | 'conectando' | 'conectado';
  * ignora (el cliente todavia no sabe quien es). Reconexion con backoff exponencial (1, 2, 4... max
  * 15 s); cada reapertura emite por `abierto$` para que el orquestador reinicie la secuencia y reenvie
  * UNIRSE.
+ *
+ * <p>Latencia simulada en dev (F7): `?lagMs=150` en la URL retrasa entrada Y salida por mitades
+ * (round-trip total = lagMs), para poder probar la prediccion/reconciliacion bajo latencia real sin
+ * tocar el servidor. Opt-in por query param — nunca se activa solo.
  */
 @Injectable({ providedIn: 'root' })
 export class ConexionPartidaService {
@@ -23,6 +27,7 @@ export class ConexionPartidaService {
   private cerradoManualmente = false;
   private timerReconexion: ReturnType<typeof setTimeout> | null = null;
   private url = '/ws/partida';
+  private readonly lagMs = this.leerLagSimulado();
 
   private readonly mensajesSubject = new Subject<MensajeServidor>();
   private readonly abiertoSubject = new Subject<void>();
@@ -38,6 +43,14 @@ export class ConexionPartidaService {
   }
 
   enviar(mensaje: MensajeCliente): void {
+    if (this.lagMs > 0) {
+      setTimeout(() => this.enviarYa(mensaje), this.lagMs / 2);
+      return;
+    }
+    this.enviarYa(mensaje);
+  }
+
+  private enviarYa(mensaje: MensajeCliente): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(mensaje));
     }
@@ -64,7 +77,13 @@ export class ConexionPartidaService {
       this.estado.set('conectado');
       this.abiertoSubject.next();
     };
-    socket.onmessage = (evento: MessageEvent<string>) => this.manejarMensaje(evento.data);
+    socket.onmessage = (evento: MessageEvent<string>) => {
+      if (this.lagMs > 0) {
+        setTimeout(() => this.manejarMensaje(evento.data), this.lagMs / 2);
+        return;
+      }
+      this.manejarMensaje(evento.data);
+    };
     socket.onclose = () => this.alCerrar();
     socket.onerror = () => socket.close();
   }
@@ -109,5 +128,11 @@ export class ConexionPartidaService {
   private urlAbsoluta(ruta: string): string {
     const protocolo = window.location.protocol === 'https:' ? 'wss' : 'ws';
     return `${protocolo}://${window.location.host}${ruta}`;
+  }
+
+  private leerLagSimulado(): number {
+    const valor = new URLSearchParams(window.location.search).get('lagMs');
+    const numero = valor === null ? 0 : Number(valor);
+    return Number.isFinite(numero) && numero > 0 ? numero : 0;
   }
 }

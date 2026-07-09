@@ -1,8 +1,10 @@
 import { computed, Injectable, signal } from '@angular/core';
+import { Mapa } from '../../models/mapa';
 import {
   Bienvenida,
   ConfigBienvenida,
   Evento,
+  Input,
   JugadorSnapshot,
   ProyectilSnapshot,
   Snapshot,
@@ -15,6 +17,12 @@ import {
   ProyectilVisual,
   ResultadoPartida,
 } from './estado-visual';
+import { Punto, simularPasoMovimiento } from './prediccion/resolutor-colisiones';
+
+interface InputPendiente {
+  sec: number;
+  mover: Punto;
+}
 
 interface SnapshotFechado {
   recibidoEn: number;
@@ -29,6 +37,11 @@ interface SnapshotFechado {
  * interpolan linealmente, sin el snap por distancia de los jugadores, porque viajan lejos por
  * snapshot); computa NUMEROS DE DANIO por diff de HP entre snapshots (R29); y arma el KILL FEED desde
  * los EVENTO KILL. Todo lo del HUD se actualiza por snapshot/evento (signals), jamas por frame.
+ *
+ * <p>Fase 7: el jugador PROPIO deja de interpolarse ~100ms en el pasado como los demas — se predice
+ * localmente en {@link #aplicarInputLocal} (misma resolucion de colisiones que el servidor, R-F7) y
+ * se reconcilia contra la posicion autoritativa cada vez que llega su `ack` en el snapshot. Los
+ * DEMAS jugadores siguen exactamente el camino de interpolacion de siempre, sin tocar.
  */
 @Injectable({ providedIn: 'root' })
 export class EstadoPartidaStore {
@@ -38,15 +51,33 @@ export class EstadoPartidaStore {
   private static readonly EDAD_MAXIMA_MS = 1000;
   private static readonly DURACION_DANIO_MS = 600;
   private static readonly MAX_KILL_FEED = 5;
+  /** Fraccion del error de reconciliacion que se "suelta" por frame — decae, nunca frena el input nuevo. */
+  private static readonly DECAIMIENTO_CORRECCION = 0.3;
+  /** Offset visual por debajo de esto se considera cero (evita temblor de punto flotante eterno). */
+  private static readonly OFFSET_DESPRECIABLE = 0.001;
+  /** Historial de RTT que se conserva para no dejar crecer el mapa sin limite. */
+  private static readonly RTT_MAX_MUESTRAS = 64;
 
   private buffer: SnapshotFechado[] = [];
   private ultimoTick = -1;
   private numerosDanio: NumeroDanio[] = [];
 
+  private mapa: Mapa | null = null;
+  /** Posicion SIMULADA real (verdad para seguir prediciendo) — nunca se demora, nunca se suaviza. */
+  private posicionPredicha: Punto | null = null;
+  /** Error de la ULTIMA reconciliacion, que se va soltando de a poco en el render (sin goma). */
+  private offsetVisual: Punto = { x: 0, y: 0 };
+  private anguloPredicho = 0;
+  private historialInputs: InputPendiente[] = [];
+  private enviadoEnPorSec = new Map<number, number>();
+
   readonly config = signal<ConfigBienvenida | null>(null);
   readonly idJugador = signal<string | null>(null);
   readonly idPartida = signal<string | null>(null);
   readonly idMapa = signal<string | null>(null);
+
+  /** RTT estimado desde el ultimo `ack` recibido (F7): sec enviada -> ack recibido, sin protocolo nuevo. */
+  readonly rttMs = signal<number | null>(null);
 
   /** Ultimo snapshot recibido, para los signals del HUD (HP, arma, kills, estado). */
   readonly ultimoSnapshot = signal<Snapshot | null>(null);
@@ -84,6 +115,34 @@ export class EstadoPartidaStore {
     this.reiniciar();
   }
 
+  /** El mapa llega por REST despues de BIENVENIDA (Flujo B): sin el, no hay contra que predecir. */
+  establecerMapa(mapa: Mapa): void {
+    this.mapa = mapa;
+  }
+
+  /**
+   * Prediccion inmediata (F7): CADA input que el cliente compone y manda tambien se aplica local,
+   * al instante, con la MISMA resolucion de colisiones que el servidor — el jugador propio deja de
+   * esperar el viaje de ida y vuelta para sentir su propio movimiento.
+   */
+  aplicarInputLocal(input: Input): void {
+    this.enviadoEnPorSec.set(input.sec, performance.now());
+    this.anguloPredicho = input.apuntar;
+    const config = this.config();
+    if (config === null || this.mapa === null) {
+      return; // recien conectado: todavia no hay config/mapa para simular
+    }
+    const base = this.posicionPredicha ?? this.posicionPropiaDelUltimoSnapshot();
+    if (base === null) {
+      return; // todavia no vi mi propia posicion en ningun snapshot
+    }
+    this.posicionPredicha = simularPasoMovimiento(
+      base, input.mover, config.velocidad, 1 / config.tickRate, config.radioJugador,
+      this.mapa.ancho, this.mapa.alto, this.mapa.obstaculos,
+    );
+    this.historialInputs.push({ sec: input.sec, mover: input.mover });
+  }
+
   aplicarSnapshot(snapshot: Snapshot): void {
     if (snapshot.tick <= this.ultimoTick) {
       return; // viejo o duplicado
@@ -95,6 +154,97 @@ export class EstadoPartidaStore {
       this.buffer.shift();
     }
     this.ultimoSnapshot.set(snapshot);
+    this.reconciliar(snapshot);
+    this.actualizarRtt(snapshot);
+  }
+
+  /**
+   * Reconciliacion (F7): toma la posicion AUTORITATIVA del `ack`, descarta los inputs ya
+   * confirmados y reaplica los pendientes encima — si hubo una mispredicción (choque que el
+   * cliente no vio igual), el resultado converge solo; si no, reproduce exactamente lo que ya
+   * se venia prediciendo.
+   */
+  private reconciliar(snapshot: Snapshot): void {
+    const idPropio = this.idJugador();
+    const config = this.config();
+    if (idPropio === null || config === null || this.mapa === null) {
+      return;
+    }
+    const ackSec = snapshot.acks[idPropio];
+    const jugadorServidor = snapshot.jugadores.find((jugador) => jugador.id === idPropio);
+    if (ackSec === undefined || jugadorServidor === undefined || jugadorServidor.estadoVida !== 'VIVO') {
+      // Muerto/espectador/todavia sin ack: sin base solida para predecir, cae a la interpolacion normal.
+      this.posicionPredicha = null;
+      this.offsetVisual = { x: 0, y: 0 };
+      this.historialInputs = [];
+      return;
+    }
+    this.historialInputs = this.historialInputs.filter((pendiente) => pendiente.sec > ackSec);
+    let posicion: Punto = { x: jugadorServidor.x, y: jugadorServidor.y };
+    const dt = 1 / config.tickRate;
+    for (const pendiente of this.historialInputs) {
+      posicion = simularPasoMovimiento(
+        posicion, pendiente.mover, config.velocidad, dt, config.radioJugador,
+        this.mapa.ancho, this.mapa.alto, this.mapa.obstaculos,
+      );
+    }
+    this.acumularErrorDeReconciliacion(posicion);
+    this.posicionPredicha = posicion;
+  }
+
+  /**
+   * El error entre lo que ya se estaba mostrando y lo recien reconciliado se guarda como offset
+   * visual DECRECIENTE (no se aplica de golpe): en el caso comun (sin mispredicción) el error es
+   * ~0 y no pasa nada; en el caso raro, el render lo absorbe suave en unos pocos frames. Un salto
+   * grande (teleport/respawn) se cae directo, igual que el snap de interpolacion de los demas.
+   */
+  private acumularErrorDeReconciliacion(posicionReconciliada: Punto): void {
+    if (this.posicionPredicha === null) {
+      return;
+    }
+    const error = {
+      x: this.posicionPredicha.x - posicionReconciliada.x,
+      y: this.posicionPredicha.y - posicionReconciliada.y,
+    };
+    const nuevoOffset = { x: this.offsetVisual.x + error.x, y: this.offsetVisual.y + error.y };
+    this.offsetVisual = Math.hypot(nuevoOffset.x, nuevoOffset.y) > EstadoPartidaStore.DISTANCIA_SNAP
+      ? { x: 0, y: 0 }
+      : nuevoOffset;
+  }
+
+  /** RTT = ahora que confirmo el ack de una sec, menos cuando esa sec se mando (F7, sin protocolo nuevo). */
+  private actualizarRtt(snapshot: Snapshot): void {
+    const idPropio = this.idJugador();
+    if (idPropio === null) {
+      return;
+    }
+    const ackSec = snapshot.acks[idPropio];
+    if (ackSec === undefined) {
+      return;
+    }
+    const enviadoEn = this.enviadoEnPorSec.get(ackSec);
+    if (enviadoEn !== undefined) {
+      this.rttMs.set(Math.round(performance.now() - enviadoEn));
+    }
+    for (const sec of this.enviadoEnPorSec.keys()) {
+      if (sec <= ackSec) {
+        this.enviadoEnPorSec.delete(sec);
+      }
+    }
+    if (this.enviadoEnPorSec.size > EstadoPartidaStore.RTT_MAX_MUESTRAS) {
+      const masVieja = Math.min(...this.enviadoEnPorSec.keys());
+      this.enviadoEnPorSec.delete(masVieja);
+    }
+  }
+
+  private posicionPropiaDelUltimoSnapshot(): Punto | null {
+    const snapshot = this.ultimoSnapshot();
+    const idPropio = this.idJugador();
+    if (snapshot === null || idPropio === null) {
+      return null;
+    }
+    const jugador = snapshot.jugadores.find((candidato) => candidato.id === idPropio);
+    return jugador === undefined ? null : { x: jugador.x, y: jugador.y };
   }
 
   aplicarEvento(evento: Evento): void {
@@ -132,6 +282,13 @@ export class EstadoPartidaStore {
     this.ultimoSnapshot.set(null);
     this.killFeed.set([]);
     this.resultadoFinal.set(null);
+    this.mapa = null;
+    this.posicionPredicha = null;
+    this.offsetVisual = { x: 0, y: 0 };
+    this.anguloPredicho = 0;
+    this.historialInputs = [];
+    this.enviadoEnPorSec.clear();
+    this.rttMs.set(null);
   }
 
   estadoVisual(ahora: number): EstadoVisual | null {
@@ -139,18 +296,54 @@ export class EstadoPartidaStore {
       return null;
     }
     const masNuevo = this.buffer[this.buffer.length - 1];
-    if (ahora - masNuevo.recibidoEn > EstadoPartidaStore.EDAD_MAXIMA_MS) {
-      return this.sinInterpolar(masNuevo.snapshot);
-    }
+    let estado: EstadoVisual;
     const objetivo = ahora - EstadoPartidaStore.RETRASO_INTERP_MS;
-    const par = this.parQueEncierra(objetivo);
+    const par = ahora - masNuevo.recibidoEn > EstadoPartidaStore.EDAD_MAXIMA_MS
+      ? null
+      : this.parQueEncierra(objetivo);
     if (par === null) {
-      return this.sinInterpolar(masNuevo.snapshot);
+      estado = this.sinInterpolar(masNuevo.snapshot);
+    } else {
+      const [anterior, siguiente] = par;
+      const rango = siguiente.recibidoEn - anterior.recibidoEn;
+      const t = rango <= 0 ? 1 : this.acotar((objetivo - anterior.recibidoEn) / rango);
+      estado = this.interpolar(anterior.snapshot, siguiente.snapshot, t);
     }
-    const [anterior, siguiente] = par;
-    const rango = siguiente.recibidoEn - anterior.recibidoEn;
-    const t = rango <= 0 ? 1 : this.acotar((objetivo - anterior.recibidoEn) / rango);
-    return this.interpolar(anterior.snapshot, siguiente.snapshot, t);
+    return this.conPrediccionPropia(estado);
+  }
+
+  /**
+   * Reemplaza, SOLO para el jugador propio, la posicion interpolada por la predicha + el offset de
+   * correccion (F7): la posicion SIMULADA nunca se demora (nuevos inputs se ven al instante); solo
+   * el offset de un eventual error de reconciliacion se va soltando de a poco, frame a frame.
+   */
+  private conPrediccionPropia(estado: EstadoVisual): EstadoVisual {
+    const idPropio = this.idJugador();
+    if (idPropio === null || this.posicionPredicha === null) {
+      return estado;
+    }
+    this.offsetVisual = {
+      x: this.decaer(this.offsetVisual.x),
+      y: this.decaer(this.offsetVisual.y),
+    };
+    const renderizada = {
+      x: this.posicionPredicha.x + this.offsetVisual.x,
+      y: this.posicionPredicha.y + this.offsetVisual.y,
+    };
+    return {
+      ...estado,
+      jugadores: estado.jugadores.map((jugador) =>
+        jugador.id === idPropio
+          ? { ...jugador, x: renderizada.x, y: renderizada.y, angulo: this.anguloPredicho }
+          : jugador,
+      ),
+    };
+  }
+
+  /** Reduce geometricamente un componente del offset hacia cero, sin quedar temblando por siempre. */
+  private decaer(valor: number): number {
+    const reducido = valor * (1 - EstadoPartidaStore.DECAIMIENTO_CORRECCION);
+    return Math.abs(reducido) < EstadoPartidaStore.OFFSET_DESPRECIABLE ? 0 : reducido;
   }
 
   private registrarDanios(previo: Snapshot | null, actual: Snapshot): void {

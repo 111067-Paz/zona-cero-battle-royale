@@ -51,6 +51,8 @@ export interface ConfigBienvenida {
   snapshotRate: number;
   mundo: number;
   velocidad: number;
+  /** Radio de colision del jugador (F7): la prediccion client-side corre la MISMA resolucion. */
+  radioJugador: number;
 }
 
 export interface Bienvenida {

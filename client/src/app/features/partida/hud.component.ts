@@ -34,6 +34,7 @@ import { EstadoPartidaStore } from './estado-partida.store';
       <div class="hud-superior-der">
         <span class="chip chip--negro">TIME: {{ tiempoTranscurrido() }}</span>
         <span class="chip chip--negro">KILLS: {{ yo.kills }}</span>
+        <span class="chip chip--negro">PING: {{ ping() === null ? '--' : ping() + 'ms' }}</span>
       </div>
 
       <div class="hud-inferior-izq">
@@ -261,6 +262,8 @@ export class HudComponent {
   readonly jugador = this.store.jugadorPropio;
   readonly vivos = this.store.vivos;
   readonly killFeed = this.store.killFeed;
+  /** RTT estimado por sec/ack (F7): sirve para validar "sin goma" mientras se prueba con latencia. */
+  readonly ping = this.store.rttMs;
 
   readonly zona = computed(() => this.store.ultimoSnapshot()?.zona ?? null);
 
