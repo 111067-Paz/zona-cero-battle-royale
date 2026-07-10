@@ -6,7 +6,7 @@ import { Router } from '@angular/router';
 import { Subscription, switchMap, timer } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { ErrorApi } from '../../models/error-api';
-import { LISTA_PERSONAJES, Personaje } from '../../models/personajes';
+import { especificacionDe, LISTA_PERSONAJES, Personaje } from '../../models/personajes';
 import { PersonajeRetratoComponent } from '../../shared/personaje-retrato.component';
 import { EstadisticaService } from './estadistica.service';
 import { MatchmakingService } from './matchmaking.service';
@@ -15,134 +15,331 @@ import { PerfilService } from './perfil.service';
 /** Cada cuanto se pollea /api/matchmaking/estado mientras se busca partida (R21). */
 const INTERVALO_POLLING_MS = 1_500;
 
+interface MisionDecorativa {
+  texto: string;
+  hecha: boolean;
+}
+
 /**
  * Lobby real (PLAN §10-F5/§10-F6, Flujo I/G). PLAY dispara la cola de matchmaking real: encola,
  * pollea "n/10" y navega a `/partida` apenas el actor de matchmaking asigna una partida.
+ *
+ * <p>Rediseno visual (fase "Matchmaking Lobby"): replica el layout del mockup de referencia
+ * (panel jugador / grilla de personajes / misiones+tienda). Todo lo marcado DECORATIVO en el
+ * template no tiene contraparte en el backend (XP, rango, insignias, misiones, tienda) — se deja
+ * fijo a proposito, sin fingir que persiste. El resto (seleccion, stats, ranking, matchmaking)
+ * sigue siendo 100% real, sin tocar la logica existente.
  */
 @Component({
   selector: 'app-lobby-page',
   imports: [DecimalPipe, PersonajeRetratoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <main class="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-4 py-8">
-      <header class="flex items-center justify-between">
-        <h1 class="text-3xl font-extrabold tracking-wide">ZONA CERO</h1>
-        <button
-          type="button"
-          (click)="salir()"
-          class="rounded-full border-2 px-4 py-2 text-sm font-bold uppercase"
-          style="border-color: var(--color-thick-border)"
-        >
-          Salir
-        </button>
-      </header>
+    <main class="fondo-espacial min-h-screen text-white">
+      <div class="mx-auto max-w-7xl px-4 py-6">
+        <header class="mb-6 flex items-center justify-between">
+          <h1 class="text-2xl font-extrabold tracking-widest">ZONA CERO</h1>
+          <button
+            type="button"
+            (click)="salir()"
+            class="rounded-full border-2 px-4 py-2 text-sm font-bold uppercase"
+            style="border-color: var(--color-thick-border)"
+          >
+            Salir
+          </button>
+        </header>
 
-      <p class="text-lg">
-        Hola, <span class="font-bold">{{ authService.usuarioActual()?.nombreUsuario }}</span>
-      </p>
+        <div class="grid grid-cols-1 gap-5 lg:grid-cols-[280px_1fr_300px]">
+          <!-- IZQUIERDA: panel del jugador -->
+          <aside aria-labelledby="jugador-heading" class="panel order-2 flex flex-col gap-4 lg:order-1">
+            <h2 id="jugador-heading" class="sr-only">Tu perfil</h2>
 
-      <section aria-labelledby="personaje-heading" class="rounded-xl border-2 p-4" style="border-color: var(--color-thick-border)">
-        <h2 id="personaje-heading" class="mb-3 text-xl font-bold uppercase">Tu personaje</h2>
-        <div class="flex flex-wrap gap-3">
-          @for (opcion of personajes; track opcion) {
+            <div class="flex items-center gap-3">
+              <app-personaje-retrato [personaje]="personajeActual()" [tamano]="72" />
+              <div>
+                <p class="text-lg font-extrabold">{{ authService.usuarioActual()?.nombreUsuario }}</p>
+                <!-- DECORATIVO: sin backend -->
+                <p class="text-xs font-bold uppercase opacity-70">Lv. {{ NIVEL_DECORATIVO }}</p>
+              </div>
+            </div>
+
+            <!-- DECORATIVO: sin backend -->
+            <div class="chip-rango" aria-hidden="true">RANK: {{ RANGO_DECORATIVO }}</div>
+
+            @if (misEstadisticas(); as stats) {
+              <dl class="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt class="opacity-70">WINS</dt>
+                  <dd class="text-lg font-extrabold">{{ stats.victorias }}</dd>
+                </div>
+                <div>
+                  <dt class="opacity-70">KILLS</dt>
+                  <dd class="text-lg font-extrabold">{{ stats.kills }}</dd>
+                </div>
+                <div>
+                  <dt class="opacity-70">K/D</dt>
+                  <dd class="text-lg font-extrabold">{{ stats.kd | number: '1.2-2' }}</dd>
+                </div>
+                <div>
+                  <dt class="opacity-70">TOP 3</dt>
+                  <dd class="text-lg font-extrabold">{{ stats.top3 }}</dd>
+                </div>
+              </dl>
+            } @else {
+              <p class="text-sm opacity-70">Cargando estadisticas...</p>
+            }
+
+            <!-- DECORATIVO: sin backend -->
+            <div aria-hidden="true">
+              <p class="mb-2 text-xs font-bold uppercase opacity-70">Insignias</p>
+              <ul class="grid grid-cols-2 gap-2">
+                @for (insignia of INSIGNIAS_DECORATIVAS; track insignia) {
+                  <li class="chip-insignia">{{ insignia }}</li>
+                }
+              </ul>
+            </div>
+          </aside>
+
+          <!-- CENTRO: party lobby + play -->
+          <section aria-labelledby="party-heading" class="panel order-1 flex flex-col gap-4 lg:order-2">
+            <h2 id="party-heading" class="text-center text-xl font-extrabold uppercase tracking-wide">
+              Party Lobby — Elegi tu personaje
+            </h2>
+
+            <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              @for (opcion of personajes; track opcion) {
+                <button
+                  type="button"
+                  (click)="elegirPersonaje(opcion)"
+                  [disabled]="cambiandoPersonaje()"
+                  [attr.aria-pressed]="opcion === personajeActual()"
+                  class="tarjeta-personaje"
+                  [class.tarjeta-personaje--activa]="opcion === personajeActual()"
+                >
+                  <app-personaje-retrato [personaje]="opcion" [tamano]="72" />
+                  <span class="tarjeta-personaje__nombre">{{ nombreDe(opcion) }}</span>
+                  <!-- DECORATIVO: sin backend -->
+                  <span class="tarjeta-personaje__xp" aria-hidden="true">{{ XP_DECORATIVO[opcion] }} XP</span>
+                  @if (opcion === personajeActual()) {
+                    <span class="tarjeta-personaje__listo">LISTO</span>
+                  }
+                </button>
+              }
+              <!-- DECORATIVO: sin backend -->
+              <button type="button" disabled class="tarjeta-invitar" aria-label="Invitar amigo (proximamente)">
+                <span class="tarjeta-invitar__mas" aria-hidden="true">+</span>
+                <span class="text-xs font-bold uppercase">Invitar amigo</span>
+              </button>
+            </div>
+
+            @if (errorPersonaje(); as mensaje) {
+              <p role="alert" class="text-sm text-red-400">{{ mensaje }}</p>
+            }
+
             <button
               type="button"
-              (click)="elegirPersonaje(opcion)"
-              [disabled]="cambiandoPersonaje()"
-              [attr.aria-pressed]="opcion === personajeActual()"
-              class="rounded-xl border-2 p-1 disabled:opacity-60"
-              [style.border-color]="opcion === personajeActual() ? 'var(--color-accent, #facc15)' : 'var(--color-thick-border)'"
+              (click)="jugar()"
+              [disabled]="buscando()"
+              class="boton-play"
             >
-              <app-personaje-retrato [personaje]="opcion" [tamano]="56" />
+              {{ buscando() ? 'Buscando... ' + (jugadoresEncontrados() ?? 0) + '/10' : 'Play' }}
             </button>
-          }
-        </div>
-        @if (errorPersonaje(); as mensaje) {
-          <p role="alert" class="mt-2 text-sm text-red-400">{{ mensaje }}</p>
-        }
-      </section>
 
-      <button
-        type="button"
-        (click)="jugar()"
-        [disabled]="buscando()"
-        class="h-16 rounded-full text-2xl font-extrabold uppercase text-black disabled:opacity-80"
-        style="background: var(--grad-play-button); border: 3px solid var(--color-thick-border)"
-      >
-        {{ buscando() ? 'Buscando... ' + (jugadoresEncontrados() ?? 0) + '/10' : 'Play' }}
-      </button>
+            @if (errorMatchmaking(); as mensaje) {
+              <p role="alert" class="text-sm text-red-400">{{ mensaje }}</p>
+            }
+          </section>
 
-      @if (errorMatchmaking(); as mensaje) {
-        <p role="alert" class="text-sm text-red-400">{{ mensaje }}</p>
-      }
+          <!-- DERECHA: misiones/tienda decorativas + ranking real -->
+          <aside aria-labelledby="misiones-heading" class="order-3 flex flex-col gap-5">
+            <!-- DECORATIVO: sin backend -->
+            <div class="panel" aria-hidden="true">
+              <h2 id="misiones-heading" class="mb-3 text-sm font-extrabold uppercase tracking-wide">Misiones</h2>
+              <ul class="flex flex-col gap-2 text-sm">
+                @for (mision of MISIONES_DECORATIVAS; track mision.texto) {
+                  <li class="flex items-center justify-between">
+                    <span [class.opacity-50]="mision.hecha">{{ mision.texto }}</span>
+                    <span [class.text-green-400]="mision.hecha">{{ mision.hecha ? '✓' : '…' }}</span>
+                  </li>
+                }
+              </ul>
+            </div>
 
-      <section aria-labelledby="mis-stats-heading" class="rounded-xl border-2 p-4" style="border-color: var(--color-thick-border)">
-        <h2 id="mis-stats-heading" class="mb-3 text-xl font-bold uppercase">Mis estadisticas</h2>
-        @if (misEstadisticas(); as stats) {
-          <dl class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div>
-              <dt class="text-xs uppercase opacity-70">Partidas</dt>
-              <dd class="text-lg font-bold">{{ stats.partidasJugadas }}</dd>
+            <!-- DECORATIVO: sin backend -->
+            <div class="panel" aria-hidden="true">
+              <h2 class="mb-2 text-sm font-extrabold uppercase tracking-wide">Tienda destacada</h2>
+              <p class="text-xs opacity-70">Proximamente: skins y objetos.</p>
             </div>
-            <div>
-              <dt class="text-xs uppercase opacity-70">Victorias</dt>
-              <dd class="text-lg font-bold">{{ stats.victorias }}</dd>
-            </div>
-            <div>
-              <dt class="text-xs uppercase opacity-70">Top 3</dt>
-              <dd class="text-lg font-bold">{{ stats.top3 }}</dd>
-            </div>
-            <div>
-              <dt class="text-xs uppercase opacity-70">Kills</dt>
-              <dd class="text-lg font-bold">{{ stats.kills }}</dd>
-            </div>
-            <div>
-              <dt class="text-xs uppercase opacity-70">Muertes</dt>
-              <dd class="text-lg font-bold">{{ stats.muertes }}</dd>
-            </div>
-            <div>
-              <dt class="text-xs uppercase opacity-70">K/D</dt>
-              <dd class="text-lg font-bold">{{ stats.kd | number: '1.2-2' }}</dd>
-            </div>
-          </dl>
-        } @else {
-          <p>Cargando...</p>
-        }
-      </section>
 
-      <section aria-labelledby="ranking-heading" class="rounded-xl border-2 p-4" style="border-color: var(--color-thick-border)">
-        <h2 id="ranking-heading" class="mb-3 text-xl font-bold uppercase">Ranking (top 10)</h2>
-        @if (ranking(); as pagina) {
-          <table class="w-full text-left">
-            <thead>
-              <tr class="text-xs uppercase opacity-70">
-                <th scope="col" class="py-1">Usuario</th>
-                <th scope="col" class="py-1">Victorias</th>
-                <th scope="col" class="py-1">K/D</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (fila of pagina.content; track fila.nombreUsuario) {
-                <tr class="border-t" style="border-color: var(--color-thick-border)">
-                  <td class="py-1">{{ fila.nombreUsuario }}</td>
-                  <td class="py-1">{{ fila.victorias }}</td>
-                  <td class="py-1">{{ fila.kd | number: '1.2-2' }}</td>
-                </tr>
-              } @empty {
-                <tr>
-                  <td colspan="3" class="py-2">Todavia no hay partidas jugadas.</td>
-                </tr>
+            <div class="panel" aria-labelledby="ranking-heading">
+              <h2 id="ranking-heading" class="mb-3 text-sm font-extrabold uppercase tracking-wide">Ranking (top 10)</h2>
+              @if (ranking(); as pagina) {
+                <table class="w-full text-left text-xs">
+                  <thead>
+                    <tr class="uppercase opacity-70">
+                      <th scope="col" class="py-1">Usuario</th>
+                      <th scope="col" class="py-1">Wins</th>
+                      <th scope="col" class="py-1">K/D</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (fila of pagina.content; track fila.nombreUsuario) {
+                      <tr class="border-t" style="border-color: var(--color-thick-border)">
+                        <td class="py-1">{{ fila.nombreUsuario }}</td>
+                        <td class="py-1">{{ fila.victorias }}</td>
+                        <td class="py-1">{{ fila.kd | number: '1.2-2' }}</td>
+                      </tr>
+                    } @empty {
+                      <tr>
+                        <td colspan="3" class="py-2">Todavia no hay partidas jugadas.</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              } @else {
+                <p class="text-xs opacity-70">Cargando...</p>
               }
-            </tbody>
-          </table>
-        } @else {
-          <p>Cargando...</p>
-        }
-      </section>
+            </div>
+          </aside>
+        </div>
+      </div>
     </main>
   `,
+  styles: [
+    `
+      .fondo-espacial {
+        background-color: #0a1128;
+        background-image:
+          radial-gradient(ellipse at 20% 15%, rgba(60, 90, 200, 0.25), transparent 50%),
+          radial-gradient(ellipse at 85% 75%, rgba(110, 70, 220, 0.18), transparent 45%),
+          radial-gradient(1.5px 1.5px at 25px 35px, rgba(255, 255, 255, 0.8), transparent),
+          radial-gradient(1px 1px at 120px 90px, rgba(255, 255, 255, 0.5), transparent),
+          radial-gradient(2px 2px at 200px 160px, rgba(255, 255, 255, 0.9), transparent),
+          radial-gradient(1px 1px at 60px 210px, rgba(255, 255, 255, 0.4), transparent);
+        background-repeat: no-repeat, no-repeat, repeat, repeat, repeat, repeat;
+        background-size: 100% 100%, 100% 100%, 240px 240px, 240px 240px, 240px 240px, 240px 240px;
+      }
+      .panel {
+        border: 3px solid var(--color-thick-border);
+        border-radius: 16px;
+        padding: 16px;
+        background: rgba(15, 22, 48, 0.75);
+        backdrop-filter: blur(2px);
+      }
+      .chip-rango {
+        align-self: flex-start;
+        border: 2px solid #facc15;
+        border-radius: 999px;
+        padding: 2px 12px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        color: #facc15;
+      }
+      .chip-insignia {
+        border: 2px solid var(--color-thick-border);
+        border-radius: 10px;
+        padding: 6px 8px;
+        font-size: 10px;
+        font-weight: 800;
+        text-align: center;
+        text-transform: uppercase;
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .tarjeta-personaje {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        border: 3px solid var(--color-thick-border);
+        border-radius: 14px;
+        padding: 10px 6px 8px;
+        background: rgba(255, 255, 255, 0.04);
+        cursor: pointer;
+        transition: border-color 0.15s ease-out;
+      }
+      .tarjeta-personaje:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .tarjeta-personaje--activa {
+        border-color: #facc15;
+        box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.35);
+      }
+      .tarjeta-personaje__nombre {
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        text-align: center;
+      }
+      .tarjeta-personaje__xp {
+        font-size: 10px;
+        opacity: 0.6;
+      }
+      .tarjeta-personaje__listo {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        border-radius: 999px;
+        background: var(--color-health-lime);
+        color: #052e12;
+        font-size: 9px;
+        font-weight: 800;
+        padding: 1px 6px;
+      }
+      .tarjeta-invitar {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        border: 3px dashed rgba(255, 255, 255, 0.35);
+        border-radius: 14px;
+        padding: 10px 6px;
+        color: rgba(255, 255, 255, 0.5);
+      }
+      .tarjeta-invitar__mas {
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1;
+      }
+      .boton-play {
+        height: 64px;
+        border-radius: 999px;
+        border: 3px solid var(--color-thick-border);
+        background: var(--grad-play-button);
+        color: #111424;
+        font-size: 24px;
+        font-weight: 800;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .boton-play:disabled {
+        opacity: 0.8;
+        cursor: default;
+      }
+    `,
+  ],
 })
 export class LobbyPage {
+  /** DECORATIVO: sin backend — valores fijos de ambientacion (mockup "Matchmaking Lobby"). */
+  protected readonly NIVEL_DECORATIVO = 28;
+  protected readonly RANGO_DECORATIVO = 'GOLD III';
+  protected readonly INSIGNIAS_DECORATIVAS = ['Champion', 'Survivor', 'Elite', 'Legendary'];
+  protected readonly MISIONES_DECORATIVAS: MisionDecorativa[] = [
+    { texto: 'Mision diaria completa', hecha: true },
+    { texto: 'Misiones semanales', hecha: true },
+    { texto: 'Mejor racha de victorias', hecha: false },
+  ];
+  protected readonly XP_DECORATIVO: Record<Personaje, number> = {
+    GATO: 6500,
+    ARDILLA: 7200,
+    DINO: 5800,
+    ROBO_PERRO: 6100,
+    CONEJO: 6900,
+  };
+
   protected readonly authService = inject(AuthService);
   private readonly estadisticaService = inject(EstadisticaService);
   private readonly matchmakingService = inject(MatchmakingService);
@@ -216,6 +413,10 @@ export class LobbyPage {
         this.errorPersonaje.set(cuerpo?.message ?? 'No se pudo cambiar el personaje.');
       },
     });
+  }
+
+  protected nombreDe(personaje: Personaje): string {
+    return especificacionDe(personaje).nombre;
   }
 
   salir(): void {

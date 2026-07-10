@@ -21,9 +21,12 @@ import { OverlayEstadoComponent } from './overlay-estado.component';
 import { RendererIsometrico } from './render/renderer-isometrico';
 import { RendererJuego } from './render/renderer-juego';
 import { RendererTopDown2D } from './render/renderer-top-down-2d';
+import { RendererTresD } from './render/tres/renderer-tres-d';
 import { TicketService } from './ticket.service';
 
-type ModoRenderer = 'top-down' | 'isometrico';
+type ModoRenderer = 'top-down' | 'isometrico' | '3d';
+
+const MODOS_RENDERER: readonly ModoRenderer[] = ['top-down', 'isometrico', '3d'];
 
 const CLAVE_RENDERER = 'zc.renderer';
 
@@ -48,20 +51,30 @@ const CLAVE_RENDERER = 'zc.renderer';
   template: `
     <div class="contenedor">
       <canvas #lienzo class="lienzo"></canvas>
+      @if (modoRenderer() === '3d') {
+        <div class="mira" aria-hidden="true"></div>
+        @if (!entrada.capturaActiva()) {
+          <button type="button" class="aviso-captura" (click)="entrada.solicitarCaptura()">
+            CLICK PARA CAPTURAR EL MOUSE
+          </button>
+        }
+      }
       <app-hud />
       <app-overlay-estado />
       <div class="pie">
         <span class="estado" [class.estado--ok]="estadoConexion() === 'conectado'">
           {{ estadoConexion() }}
         </span>
-        <span class="pista">WASD moverte · mouse apuntar · click disparar</span>
+        <span class="pista">
+          {{ modoRenderer() === '3d' ? 'mouse girar · W avanzar · click disparar' : 'WASD moverte · mouse apuntar · click disparar' }}
+        </span>
         <button
           type="button"
           class="alternar-vista"
           (click)="alternarRenderer()"
           [disabled]="cambiandoRenderer()"
         >
-          VISTA: {{ modoRenderer() === 'top-down' ? '2D' : 'ISO' }}
+          VISTA: {{ etiquetaModo() }}
         </button>
       </div>
     </div>
@@ -115,12 +128,43 @@ const CLAVE_RENDERER = 'zc.renderer';
         opacity: 0.6;
         cursor: default;
       }
+      .mira {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 6px;
+        height: 6px;
+        margin: -3px 0 0 -3px;
+        border-radius: 50%;
+        background: #eaf0ff;
+        border: 2px solid var(--color-thick-border);
+        pointer-events: none;
+      }
+      .aviso-captura {
+        position: absolute;
+        top: 40%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        border: 3px solid var(--color-thick-border);
+        border-radius: 10px;
+        padding: 10px 18px;
+        background: rgba(15, 26, 54, 0.9);
+        color: #eaf0ff;
+        text-transform: uppercase;
+        font-weight: 800;
+        font-size: 14px;
+        cursor: pointer;
+        pointer-events: auto;
+      }
+      .aviso-captura:hover {
+        background: rgba(30, 45, 80, 0.95);
+      }
     `,
   ],
 })
 export class PartidaComponent implements AfterViewInit, OnDestroy {
   private readonly conexion = inject(ConexionPartidaService);
-  private readonly entrada = inject(EntradaService);
+  protected readonly entrada = inject(EntradaService);
   private readonly store = inject(EstadoPartidaStore);
   private readonly mapaService = inject(MapaService);
   private readonly ticketService = inject(TicketService);
@@ -128,6 +172,8 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
   private readonly router = inject(Router);
 
   private readonly lienzo = viewChild.required<ElementRef<HTMLCanvasElement>>('lienzo');
+  /** El nodo real en uso: tras el primer swap de renderer ya NO es el que devuelve `lienzo()` (B1, Decision #2). */
+  private lienzoActual!: HTMLCanvasElement;
   private renderer: RendererJuego;
   private mapaActual: Mapa | null = null;
   private readonly suscripciones: Subscription[] = [];
@@ -150,8 +196,12 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
     }
     this.idPartida = idPartida;
 
-    const canvas = this.lienzo().nativeElement;
-    await this.renderer.iniciar(canvas);
+    this.lienzoActual = this.lienzo().nativeElement;
+    await this.renderer.iniciar(this.lienzoActual);
+    if (this.modoRenderer() === '3d') {
+      // Sin gesto de usuario en la carga inicial: no se pide pointer lock, el aviso de captura invita al click.
+      this.entrada.configurarModo('tercera-persona', this.lienzoActual, false);
+    }
 
     this.suscripciones.push(
       this.conexion.mensajes$.subscribe((mensaje) => this.despachar(mensaje)),
@@ -159,7 +209,7 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
     );
 
     this.conexion.conectar();
-    this.entrada.iniciar(canvas, (input) => {
+    this.entrada.iniciar(this.lienzoActual, (input) => {
       this.conexion.enviar(input);
       this.store.aplicarInputLocal(input); // prediccion inmediata del movimiento propio (F7)
     });
@@ -172,6 +222,9 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
     this.conexion.desconectar();
     this.renderer.destruir();
     this.suscripciones.forEach((suscripcion) => suscripcion.unsubscribe());
+    // El store es root: sin esto, resultadoFinal/FINALIZADA sobreviven al salir y la PROXIMA
+    // partida arrancaria mostrando el podio viejo (y el guard dejaria salir sin confirmar).
+    this.store.reiniciar();
   }
 
   /** Pide el ticket recien al abrir el socket (TTL 30s, R1): pedirlo antes arriesga que venza. */
@@ -197,6 +250,9 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
         break;
       case 'EVENTO':
         this.store.aplicarEvento(mensaje);
+        if (mensaje.evento === 'FIN_PARTIDA') {
+          this.conexion.dejarDeReconectar(); // la partida murio: reconectar seria un ciclo infinito
+        }
         break;
     }
   }
@@ -212,19 +268,27 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Alterna top-down <-> isometrico EN CALIENTE (F8, la prueba del Bridge): destruye el renderer
-   * actual, inicia el otro sobre el MISMO canvas y le re-fija el mapa. El rAF sigue corriendo
-   * (renderizar() de un renderer sin iniciar es un no-op seguro); store/conexion/entrada, intactos.
+   * Cicla 2D -> ISO -> 3D -> 2D EN CALIENTE (F8/fase 3D, la prueba del Bridge con 3 proyecciones):
+   * destruye el renderer actual, RECREA el nodo `<canvas>` (Decision #2 — Pixi deja el contexto
+   * webgl2 pegado al nodo tras `destroy()`; compartirlo con Three es comportamiento no especificado),
+   * inicia el nuevo sobre el canvas fresco y le re-fija el mapa cacheado. El rAF sigue corriendo
+   * (renderizar() de un renderer sin iniciar es un no-op seguro); store/conexion, intactos.
    */
   async alternarRenderer(): Promise<void> {
     if (this.cambiandoRenderer()) {
       return;
     }
     this.cambiandoRenderer.set(true);
-    const nuevoModo: ModoRenderer = this.modoRenderer() === 'top-down' ? 'isometrico' : 'top-down';
+    const indiceActual = MODOS_RENDERER.indexOf(this.modoRenderer());
+    const nuevoModo = MODOS_RENDERER[(indiceActual + 1) % MODOS_RENDERER.length];
+
     this.renderer.destruir();
+    const canvas = this.recrearLienzo();
+    // Sincrono y ANTES del await siguiente: el pointer lock del modo 3D necesita el gesto de este click.
+    this.entrada.configurarModo(nuevoModo === '3d' ? 'tercera-persona' : 'plano', canvas);
+
     const nuevoRenderer = this.crearRenderer(nuevoModo);
-    await nuevoRenderer.iniciar(this.lienzo().nativeElement);
+    await nuevoRenderer.iniciar(canvas);
     if (this.mapaActual !== null) {
       nuevoRenderer.establecerMapa(this.mapaActual);
     }
@@ -234,12 +298,41 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
     this.cambiandoRenderer.set(false);
   }
 
+  /** Reemplaza el nodo `<canvas>` por uno nuevo (mismo padre, misma clase): contexto WebGL siempre virgen. */
+  private recrearLienzo(): HTMLCanvasElement {
+    const viejo = this.lienzoActual;
+    const nuevo = document.createElement('canvas');
+    nuevo.className = viejo.className;
+    viejo.replaceWith(nuevo);
+    this.lienzoActual = nuevo;
+    return nuevo;
+  }
+
+  protected etiquetaModo(): string {
+    switch (this.modoRenderer()) {
+      case 'top-down':
+        return '2D';
+      case 'isometrico':
+        return 'ISO';
+      case '3d':
+        return '3D';
+    }
+  }
+
   private crearRenderer(modo: ModoRenderer): RendererJuego {
-    return modo === 'isometrico' ? new RendererIsometrico() : new RendererTopDown2D();
+    switch (modo) {
+      case 'isometrico':
+        return new RendererIsometrico();
+      case '3d':
+        return new RendererTresD();
+      case 'top-down':
+        return new RendererTopDown2D();
+    }
   }
 
   private leerModoGuardado(): ModoRenderer {
-    return localStorage.getItem(CLAVE_RENDERER) === 'isometrico' ? 'isometrico' : 'top-down';
+    const guardado = localStorage.getItem(CLAVE_RENDERER);
+    return MODOS_RENDERER.includes(guardado as ModoRenderer) ? (guardado as ModoRenderer) : 'top-down';
   }
 
   private readonly bucleRender = (): void => {

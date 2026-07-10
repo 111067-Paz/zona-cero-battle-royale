@@ -45,6 +45,11 @@
   "decoraciones": [
     { "tipo": "CAMINO", "x": 10,  "y": 120, "ancho": 236, "alto": 16 },
     { "tipo": "CAMINO", "x": 120, "y": 10,  "ancho": 16,  "alto": 236 },
-    { "tipo": "LAGO", "x": 190, "y": 60, "ancho": 50, "alto": 70 }
+    { "tipo": "LAGO", "x": 190, "y": 60, "ancho": 50, "alto": 70 },
+    { "tipo": "ARBUSTO", "x": 90,  "y": 40,  "ancho": 5, "alto": 5 },
+    { "tipo": "ARBUSTO", "x": 40,  "y": 105, "ancho": 5, "alto": 5 },
+    { "tipo": "ARBUSTO", "x": 170, "y": 160, "ancho": 5, "alto": 5 },
+    { "tipo": "ARBUSTO", "x": 95,  "y": 175, "ancho": 4, "alto": 4 },
+    { "tipo": "ARBUSTO", "x": 215, "y": 145, "ancho": 4, "alto": 4 }
   ]
 }

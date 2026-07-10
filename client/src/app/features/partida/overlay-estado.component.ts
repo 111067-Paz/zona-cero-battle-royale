@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { Personaje } from '../../models/personajes';
 import { PersonajeRetratoComponent } from '../../shared/personaje-retrato.component';
 import { EstadoPartidaStore } from './estado-partida.store';
@@ -50,6 +51,8 @@ import { EstadoPartidaStore } from './estado-partida.store';
               </li>
             }
           </ul>
+          <p class="cuenta-lobby" role="status">Volviendo al lobby en {{ segundosParaLobby() }}s</p>
+          <button type="button" class="boton-lobby" (click)="volverAlLobby()">VOLVER AL LOBBY</button>
         </div>
       </div>
     }
@@ -103,6 +106,24 @@ import { EstadoPartidaStore } from './estado-partida.store';
       }
       .panel--podio {
         min-width: 260px;
+        pointer-events: auto;
+      }
+      .cuenta-lobby {
+        margin-top: 14px;
+        font-size: 11px;
+        opacity: 0.7;
+      }
+      .boton-lobby {
+        margin-top: 8px;
+        cursor: pointer;
+        border: 3px solid var(--color-thick-border);
+        border-radius: 10px;
+        padding: 10px 20px;
+        background: var(--grad-play-button);
+        color: #111424;
+        font-weight: 800;
+        font-size: 14px;
+        text-transform: uppercase;
       }
       .ganador {
         margin-top: 6px;
@@ -128,10 +149,50 @@ import { EstadoPartidaStore } from './estado-partida.store';
   ],
 })
 export class OverlayEstadoComponent {
+  private static readonly SEGUNDOS_VUELTA_LOBBY = 10;
+
   private readonly store = inject(EstadoPartidaStore);
+  private readonly router = inject(Router);
+  private intervaloVuelta: ReturnType<typeof setInterval> | null = null;
 
   readonly estado = computed(() => this.store.ultimoSnapshot()?.estado ?? null);
   readonly resultado = this.store.resultadoFinal;
+  protected readonly segundosParaLobby = signal(OverlayEstadoComponent.SEGUNDOS_VUELTA_LOBBY);
+
+  constructor() {
+    effect(() => {
+      if (this.resultado() !== null) {
+        this.iniciarCuentaRegresiva();
+      }
+    });
+    inject(DestroyRef).onDestroy(() => this.detenerCuentaRegresiva());
+  }
+
+  protected volverAlLobby(): void {
+    this.detenerCuentaRegresiva(); // cancela ANTES de navegar: el timer no navega una segunda vez
+    this.router.navigate(['/lobby']);
+  }
+
+  private iniciarCuentaRegresiva(): void {
+    if (this.intervaloVuelta !== null) {
+      return; // ya esta corriendo (el effect puede volver a leer el signal sin que resultado cambie)
+    }
+    this.intervaloVuelta = setInterval(() => {
+      const restantes = this.segundosParaLobby() - 1;
+      this.segundosParaLobby.set(restantes);
+      if (restantes <= 0) {
+        this.detenerCuentaRegresiva();
+        this.router.navigate(['/lobby']);
+      }
+    }, 1000);
+  }
+
+  private detenerCuentaRegresiva(): void {
+    if (this.intervaloVuelta !== null) {
+      clearInterval(this.intervaloVuelta);
+      this.intervaloVuelta = null;
+    }
+  }
 
   readonly cantidadJugadores = computed(() => this.store.ultimoSnapshot()?.jugadores.length ?? 0);
   readonly jugadoresLobby = computed(() => this.store.ultimoSnapshot()?.jugadores ?? []);

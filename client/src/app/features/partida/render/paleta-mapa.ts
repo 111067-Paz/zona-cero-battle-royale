@@ -26,13 +26,18 @@ export function especificacionObstaculo(tipo: TipoObstaculo): EspecificacionObst
 }
 
 export const COLOR_CESPED = 0x82c341;
+export const COLOR_CESPED_CLARO = 0x8fce4d;
+export const COLOR_CESPED_OSCURO = 0x74b338;
 export const COLOR_RIO = 0x3aa7d8;
 export const COLOR_RIO_CLARO = 0x6fc3e6;
 export const COLOR_LAGO = 0x2f7fb0;
 export const COLOR_LAGO_CLARO = 0x4fa3d6;
 export const COLOR_CAMINO = 0xcbb488;
+export const COLOR_CAMINO_BORDE = 0xb59a6b;
 export const COLOR_FLOR_PETALO = 0xff8fc7;
 export const COLOR_FLOR_CENTRO = 0xffe066;
+export const COLOR_ARBUSTO = 0x4a933e;
+export const COLOR_ARBUSTO_CLARO = 0x66b34e;
 
 /** Fase animada 0..1 para el agua (RIO/LAGO): un ciclo lento, sin estado propio (deriva del reloj). */
 export function faseAgua(ahoraMs: number, periodoMs = 2400): number {

@@ -3,7 +3,12 @@ import { DecoracionMapa, Mapa, RectanguloMapa } from '../../../models/mapa';
 import { BotinVisual, EstadoVisual, JugadorVisual, NumeroDanio, ProyectilVisual, ZonaVisual } from '../estado-visual';
 import { dibujarChibi } from './dibujo-chibi';
 import {
+  COLOR_ARBUSTO,
+  COLOR_ARBUSTO_CLARO,
   COLOR_CAMINO,
+  COLOR_CAMINO_BORDE,
+  COLOR_CESPED_CLARO,
+  COLOR_CESPED_OSCURO,
   COLOR_FLOR_CENTRO,
   COLOR_FLOR_PETALO,
   COLOR_LAGO,
@@ -23,6 +28,13 @@ interface RectanguloPantalla {
   y: number;
   ancho: number;
   alto: number;
+}
+
+interface ParcheCesped {
+  x: number;
+  y: number;
+  radio: number;
+  claro: boolean;
 }
 
 /**
@@ -53,9 +65,11 @@ export class RendererTopDown2D implements RendererJuego {
   private static readonly COLOR_ZONA_PROXIMA = 0xffcc00;
   private static readonly COLOR_BOTIQUIN = 0x4ade80;
   private static readonly COLOR_ARMA_BOTIN = 0xffcc00;
+  private static readonly CANTIDAD_PARCHES_CESPED = 48;
 
   private app: Application | null = null;
   private mapa: Mapa | null = null;
+  private parchesCesped: ParcheCesped[] = [];
   private readonly graficos = new Graphics();
   private readonly textosDanio: Text[] = [];
 
@@ -75,6 +89,24 @@ export class RendererTopDown2D implements RendererJuego {
 
   establecerMapa(mapa: Mapa): void {
     this.mapa = mapa;
+    this.parchesCesped = this.generarParchesCesped(mapa);
+  }
+
+  /** Parches de pasto deterministas (sin Math.random): rompen el verde plano con textura, siempre iguales para el mismo mapa. */
+  private generarParchesCesped(mapa: Mapa): ParcheCesped[] {
+    const parches: ParcheCesped[] = [];
+    for (let i = 0; i < RendererTopDown2D.CANTIDAD_PARCHES_CESPED; i++) {
+      const tx = semillaDeterministica(i * 3.7, 11.3);
+      const ty = semillaDeterministica(i * 1.9, 7.1);
+      const tr = semillaDeterministica(i * 5.3, 2.6);
+      parches.push({
+        x: tx * mapa.ancho,
+        y: ty * mapa.alto,
+        radio: 2 + tr * 4,
+        claro: semillaDeterministica(i * 2.2, 9.4) > 0.5,
+      });
+    }
+    return parches;
   }
 
   renderizar(estado: EstadoVisual, idJugadorPropio: string | null): void {
@@ -155,6 +187,16 @@ export class RendererTopDown2D implements RendererJuego {
       .fill(RendererTopDown2D.COLOR_CESPED)
       .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
 
+    for (const parche of this.parchesCesped) {
+      const px = (parche.x - camara.x) * escala + centroX;
+      const py = (parche.y - camara.y) * escala + centroY;
+      const pr = parche.radio * escala;
+      if (!this.enPantalla(px - pr, py - pr, pr * 2, pr * 2, anchoPantalla, altoPantalla)) {
+        continue;
+      }
+      this.graficos.ellipse(px, py, pr, pr * 0.7).fill(parche.claro ? COLOR_CESPED_CLARO : COLOR_CESPED_OSCURO);
+    }
+
     const ahoraMs = performance.now();
     for (const decoracion of this.mapa.decoraciones) {
       this.dibujarDecoracion(decoracion, camara, centroX, centroY, anchoPantalla, altoPantalla, ahoraMs);
@@ -200,14 +242,50 @@ export class RendererTopDown2D implements RendererJuego {
         this.graficos.rect(rect.x, rect.y, rect.ancho, rect.alto).fill(this.colorAgua(COLOR_LAGO, COLOR_LAGO_CLARO, ahoraMs));
         return;
       case 'CAMINO':
-        this.graficos.rect(rect.x, rect.y, rect.ancho, rect.alto).fill(COLOR_CAMINO);
+        this.dibujarCamino(rect, decoracion);
         return;
       case 'FLOR':
         this.dibujarFlores(decoracion, rect);
         return;
+      case 'ARBUSTO':
+        this.dibujarArbusto(rect);
+        return;
       default:
         this.graficos.rect(rect.x, rect.y, rect.ancho, rect.alto).fill(RendererTopDown2D.COLOR_CESPED);
     }
+  }
+
+  private dibujarCamino(rect: RectanguloPantalla, decoracion: DecoracionMapa): void {
+    const radio = Math.min(rect.ancho, rect.alto) * 0.35;
+    this.graficos
+      .roundRect(rect.x, rect.y, rect.ancho, rect.alto, radio)
+      .fill(COLOR_CAMINO)
+      .stroke({ width: 2, color: COLOR_CAMINO_BORDE });
+    const cantidadPiedras = 4;
+    for (let i = 0; i < cantidadPiedras; i++) {
+      const tx = semillaDeterministica(decoracion.x + i * 6.1, decoracion.y + i * 2.3);
+      const ty = semillaDeterministica(decoracion.y + i * 4.7, decoracion.x + i * 8.9);
+      this.graficos.circle(rect.x + tx * rect.ancho, rect.y + ty * rect.alto, 1.5).fill(COLOR_CAMINO_BORDE);
+    }
+  }
+
+  /** Arbusto: 3 circulos solapados con highlights, posicion determinista para no repetir el mismo dibujo. */
+  private dibujarArbusto(rect: RectanguloPantalla): void {
+    const cx = rect.x + rect.ancho / 2;
+    const cy = rect.y + rect.alto / 2;
+    const radio = Math.min(rect.ancho, rect.alto) / 2;
+    const centros = [
+      { x: cx, y: cy, r: radio },
+      { x: cx - radio * 0.6, y: cy + radio * 0.25, r: radio * 0.7 },
+      { x: cx + radio * 0.6, y: cy + radio * 0.25, r: radio * 0.7 },
+    ];
+    for (const bola of centros) {
+      this.graficos
+        .circle(bola.x, bola.y, bola.r)
+        .fill(COLOR_ARBUSTO)
+        .stroke({ width: 2, color: RendererTopDown2D.COLOR_BORDE });
+    }
+    this.graficos.circle(cx - radio * 0.25, cy - radio * 0.25, radio * 0.25).fill(COLOR_ARBUSTO_CLARO);
   }
 
   /** Flores deterministicas (sin Math.random): mismas coordenadas -> mismas flores, siempre. */
@@ -262,48 +340,126 @@ export class RendererTopDown2D implements RendererJuego {
     }
   }
 
+  /** Caja de madera: relleno + refuerzo en X + bisel (luz arriba/izq, sombra abajo/der) + marco fino. */
   private dibujarCaja(rect: RectanguloPantalla, especificacion: EspecificacionObstaculo): void {
     this.graficos
       .rect(rect.x, rect.y, rect.ancho, rect.alto)
       .fill(especificacion.colorPrincipal)
       .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
-    for (let i = 1; i <= 2; i++) {
-      const fy = rect.y + (rect.alto * i) / 3;
-      this.graficos.moveTo(rect.x, fy).lineTo(rect.x + rect.ancho, fy)
-        .stroke({ width: 2, color: especificacion.colorSecundario });
-    }
+
+    const inset = Math.min(3, rect.ancho * 0.1, rect.alto * 0.1);
+    const grosorX = Math.max(2, rect.ancho * 0.06);
+    this.graficos
+      .moveTo(rect.x + inset, rect.y + inset)
+      .lineTo(rect.x + rect.ancho - inset, rect.y + rect.alto - inset)
+      .stroke({ width: grosorX, color: especificacion.colorSecundario });
+    this.graficos
+      .moveTo(rect.x + rect.ancho - inset, rect.y + inset)
+      .lineTo(rect.x + inset, rect.y + rect.alto - inset)
+      .stroke({ width: grosorX, color: especificacion.colorSecundario });
+
+    const colorClaro = lerpColor(especificacion.colorPrincipal, 0xffffff, 0.3);
+    const colorOscuro = lerpColor(especificacion.colorPrincipal, 0x000000, 0.3);
+    this.graficos
+      .moveTo(rect.x + inset, rect.y + rect.alto - inset)
+      .lineTo(rect.x + inset, rect.y + inset)
+      .lineTo(rect.x + rect.ancho - inset, rect.y + inset)
+      .stroke({ width: 2, color: colorClaro });
+    this.graficos
+      .moveTo(rect.x + inset, rect.y + rect.alto - inset)
+      .lineTo(rect.x + rect.ancho - inset, rect.y + rect.alto - inset)
+      .lineTo(rect.x + rect.ancho - inset, rect.y + inset)
+      .stroke({ width: 2, color: colorOscuro });
+
+    this.graficos
+      .rect(rect.x + 1.5, rect.y + 1.5, Math.max(rect.ancho - 3, 0), Math.max(rect.alto - 3, 0))
+      .stroke({ width: 1.5, color: especificacion.colorSecundario });
   }
 
+  /** Arbol: sombra proyectada + copa en 3 capas (rim oscuro, principal, highlight) para dar volumen. */
   private dibujarArbol(rect: RectanguloPantalla, especificacion: EspecificacionObstaculo): void {
     const cx = rect.x + rect.ancho / 2;
     const cy = rect.y + rect.alto / 2;
     const radioCopa = Math.min(rect.ancho, rect.alto) / 2;
     const anchoTronco = rect.ancho * 0.25;
+
+    this.graficos
+      .ellipse(cx + 3, cy + rect.alto * 0.35, radioCopa * 0.8, radioCopa * 0.35)
+      .fill({ color: 0x000000, alpha: 0.15 });
+
     this.graficos
       .rect(cx - anchoTronco / 2, cy, anchoTronco, rect.alto / 2)
       .fill(especificacion.colorSecundario)
       .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
+
+    const colorRim = lerpColor(especificacion.colorPrincipal, 0x000000, 0.15);
     this.graficos
       .circle(cx, cy, radioCopa)
-      .fill(especificacion.colorPrincipal)
+      .fill(colorRim)
       .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
+    this.graficos.circle(cx, cy, radioCopa * 0.78).fill(especificacion.colorPrincipal);
+    const colorHighlight = lerpColor(especificacion.colorPrincipal, 0xffffff, 0.28);
+    this.graficos.circle(cx - radioCopa * 0.25, cy - radioCopa * 0.25, radioCopa * 0.42).fill(colorHighlight);
   }
 
+  /** Roca facetada: poligono irregular determinista (7 vertices) + faceta clara + grietas. */
   private dibujarRoca(rect: RectanguloPantalla, especificacion: EspecificacionObstaculo): void {
+    const cx = rect.x + rect.ancho / 2;
+    const cy = rect.y + rect.alto / 2;
+    const semiX = rect.ancho / 2;
+    const semiY = rect.alto / 2;
+    const vertices = 7;
+    const puntos: number[] = [];
+    for (let i = 0; i < vertices; i++) {
+      const angulo = (i / vertices) * Math.PI * 2;
+      const factor = 0.72 + 0.28 * semillaDeterministica(cx + i * 4.3, cy + i * 2.7);
+      puntos.push(cx + Math.cos(angulo) * semiX * factor, cy + Math.sin(angulo) * semiY * factor);
+    }
+    this.graficos.poly(puntos).fill(especificacion.colorPrincipal).stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
+
+    const colorClaro = lerpColor(especificacion.colorPrincipal, 0xffffff, 0.18);
     this.graficos
-      .roundRect(rect.x, rect.y, rect.ancho, rect.alto, Math.min(rect.ancho, rect.alto) * 0.3)
-      .fill(especificacion.colorPrincipal)
-      .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
+      .poly([cx - semiX * 0.15, cy - semiY * 0.35, cx + semiX * 0.25, cy - semiY * 0.1, cx - semiX * 0.05, cy + semiY * 0.1])
+      .fill(colorClaro);
+
+    this.graficos
+      .moveTo(cx - semiX * 0.3, cy - semiY * 0.2)
+      .lineTo(cx + semiX * 0.1, cy + semiY * 0.3)
+      .stroke({ width: 1.5, color: especificacion.colorSecundario });
+    this.graficos
+      .moveTo(cx + semiX * 0.2, cy - semiY * 0.3)
+      .lineTo(cx + semiX * 0.35, cy)
+      .stroke({ width: 1.5, color: especificacion.colorSecundario });
   }
 
+  /** Carpa: triangulo + base + puerta oscura + franjas del apex a la base + banderin en la punta. */
   private dibujarCarpa(rect: RectanguloPantalla, especificacion: EspecificacionObstaculo): void {
     const apexX = rect.x + rect.ancho / 2;
+    const apexY = rect.y;
     this.graficos
-      .poly([apexX, rect.y, rect.x, rect.y + rect.alto, rect.x + rect.ancho, rect.y + rect.alto])
+      .poly([apexX, apexY, rect.x, rect.y + rect.alto, rect.x + rect.ancho, rect.y + rect.alto])
       .fill(especificacion.colorPrincipal)
       .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
     const alturaBase = rect.alto * 0.25;
     this.graficos.rect(rect.x, rect.y + rect.alto - alturaBase, rect.ancho, alturaBase).fill(especificacion.colorSecundario);
+
+    const colorPuerta = lerpColor(especificacion.colorPrincipal, 0x000000, 0.45);
+    const anchoPuerta = rect.ancho * 0.22;
+    this.graficos
+      .poly([apexX - anchoPuerta / 2, rect.y + rect.alto, apexX + anchoPuerta / 2, rect.y + rect.alto, apexX, rect.y + rect.alto * 0.4])
+      .fill(colorPuerta);
+
+    this.graficos
+      .moveTo(apexX, apexY)
+      .lineTo(rect.x + rect.ancho * 0.25, rect.y + rect.alto)
+      .stroke({ width: 2, color: especificacion.colorSecundario });
+    this.graficos
+      .moveTo(apexX, apexY)
+      .lineTo(rect.x + rect.ancho * 0.75, rect.y + rect.alto)
+      .stroke({ width: 2, color: especificacion.colorSecundario });
+
+    this.graficos.moveTo(apexX, apexY).lineTo(apexX, apexY - 8).stroke({ width: 2, color: RendererTopDown2D.COLOR_BORDE });
+    this.graficos.poly([apexX, apexY - 8, apexX + 6, apexY - 6, apexX, apexY - 4]).fill(0xffcc00);
   }
 
   private dibujarJugador(x: number, y: number, jugador: JugadorVisual, propio: boolean): void {

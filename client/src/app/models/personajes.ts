@@ -8,7 +8,10 @@ export type Personaje = 'GATO' | 'DINO' | 'ROBO_PERRO' | 'CONEJO' | 'ARDILLA';
 
 export interface EspecificacionPersonaje {
   id: Personaje;
+  /** Nombre de display (los del mockup "Matchmaking Lobby"). El enum/wire sigue siendo el id. */
   nombre: string;
+  /** Nombre de archivo del retrato PNG en `public/personajes/` (sin extension). */
+  slug: string;
   /** 0xRRGGBB, listo para PixiJS Graphics (fill numerico). */
   colorCuerpo: number;
   /** Segundo tono (vientre/detalle), tambien numerico para PixiJS. */
@@ -16,12 +19,20 @@ export interface EspecificacionPersonaje {
 }
 
 export const PERSONAJES: Record<Personaje, EspecificacionPersonaje> = {
-  GATO: { id: 'GATO', nombre: 'Gato', colorCuerpo: 0xf4a341, colorDetalle: 0xfff3e0 },
-  DINO: { id: 'DINO', nombre: 'Dino', colorCuerpo: 0x4caf50, colorDetalle: 0xc8e6a0 },
-  ROBO_PERRO: { id: 'ROBO_PERRO', nombre: 'Robo-Perro', colorCuerpo: 0x9e9e9e, colorDetalle: 0x64d8e8 },
-  CONEJO: { id: 'CONEJO', nombre: 'Conejo', colorCuerpo: 0xf5f5f5, colorDetalle: 0xffc1cc },
-  ARDILLA: { id: 'ARDILLA', nombre: 'Ardilla', colorCuerpo: 0x8d5a2b, colorDetalle: 0xd7a86e },
+  GATO: { id: 'GATO', nombre: 'Battle Kat', slug: 'gato', colorCuerpo: 0xf4a341, colorDetalle: 0xfff3e0 },
+  DINO: { id: 'DINO', nombre: 'Dino Dude', slug: 'dino', colorCuerpo: 0x4caf50, colorDetalle: 0xc8e6a0 },
+  ROBO_PERRO: { id: 'ROBO_PERRO', nombre: 'Robo Pup', slug: 'robo-perro', colorCuerpo: 0x9e9e9e, colorDetalle: 0x64d8e8 },
+  CONEJO: { id: 'CONEJO', nombre: 'Sparkle Bunny', slug: 'conejo', colorCuerpo: 0xf5f5f5, colorDetalle: 0xffc1cc },
+  ARDILLA: { id: 'ARDILLA', nombre: 'Shadow Squirrel', slug: 'ardilla', colorCuerpo: 0x8d5a2b, colorDetalle: 0xd7a86e },
 };
+
+/**
+ * Ruta del retrato PNG en `public/` (servido en raiz por angular.json). El componente de retrato
+ * cae al SVG vectorial si el archivo no existe — los PNG los provee el usuario, no el repo.
+ */
+export function rutaRetrato(personaje: Personaje | string | null | undefined): string {
+  return `/personajes/${especificacionDe(personaje).slug}.png`;
+}
 
 export const LISTA_PERSONAJES: readonly Personaje[] = ['GATO', 'DINO', 'ROBO_PERRO', 'CONEJO', 'ARDILLA'];
 

@@ -45,6 +45,11 @@
     { "tipo": "CAMINO", "x": 120, "y": 10,  "ancho": 16,  "alto": 236 },
     { "tipo": "FLOR", "x": 20,  "y": 60,  "ancho": 6, "alto": 6 },
     { "tipo": "FLOR", "x": 230, "y": 220, "ancho": 6, "alto": 6 },
-    { "tipo": "FLOR", "x": 100, "y": 230, "ancho": 6, "alto": 6 }
+    { "tipo": "FLOR", "x": 100, "y": 230, "ancho": 6, "alto": 6 },
+    { "tipo": "ARBUSTO", "x": 40,  "y": 45,  "ancho": 5, "alto": 5 },
+    { "tipo": "ARBUSTO", "x": 160, "y": 80,  "ancho": 5, "alto": 5 },
+    { "tipo": "ARBUSTO", "x": 90,  "y": 170, "ancho": 5, "alto": 5 },
+    { "tipo": "ARBUSTO", "x": 200, "y": 230, "ancho": 5, "alto": 5 },
+    { "tipo": "ARBUSTO", "x": 140, "y": 60,  "ancho": 4, "alto": 4 }
   ]
 }

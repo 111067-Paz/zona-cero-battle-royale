@@ -1,0 +1,482 @@
+import {
+  AmbientLight,
+  Color,
+  DirectionalLight,
+  DoubleSide,
+  Fog,
+  Material,
+  Mesh,
+  MeshBasicMaterial,
+  MeshToonMaterial,
+  PerspectiveCamera,
+  PlaneGeometry,
+  RingGeometry,
+  Scene,
+  SphereGeometry,
+  Texture,
+  Vector3,
+  WebGLRenderer,
+} from 'three';
+import { Mapa } from '../../../../models/mapa';
+import { BotinVisual, EstadoVisual, JugadorVisual, NumeroDanio, ProyectilVisual } from '../../estado-visual';
+import { faseAgua, lerpColor } from '../paleta-mapa';
+import { RendererJuego } from '../renderer-juego';
+import { ALTURA_CUERPO_CHIBI, ChibiRig, construirChibi, faseDesdeId, RADIO_CABEZA_CHIBI, RADIO_CUERPO_CHIBI } from './modelos-chibi-3d';
+import { construirMundo3D, Mundo3D } from './mundo-3d';
+import { aVector3, crearGradienteToon, crearSpriteCanvas, direccionDesdeAngulo, SpriteCanvas } from './utiles-3d';
+import { construirZona3D, Zona3D } from './zona-3d';
+
+const COLOR_CIELO = 0x8fd3f4;
+const COLOR_CESPED = 0x82c341;
+const COLOR_ANILLO_PROPIO = 0xffcc00;
+const COLOR_PROYECTIL = 0xffee44;
+const COLOR_BOTIQUIN = 0x4ade80;
+const COLOR_ARMA_BOTIN = 0xffcc00;
+
+const ALTURA_CABEZA_CENTRO = RADIO_CUERPO_CHIBI * 1.7 + RADIO_CABEZA_CHIBI * 0.6;
+const ALTURA_TOPE_CABEZA = ALTURA_CABEZA_CENTRO + RADIO_CABEZA_CHIBI;
+const VIDA_MAX = 100;
+
+const CANTIDAD_PROYECTILES_POOL = 64;
+const RADIO_PROYECTIL = 0.12;
+
+const CANTIDAD_TEXTOS_DANIO = 24;
+const DURACION_DANIO_MS = 600;
+
+/** Distancia recorrida por frame por encima de la cual el chibi se considera "en movimiento" (bobbing, B5). */
+const UMBRAL_MOVIMIENTO_BOBBING = 0.004;
+
+/** Offset de camara detras y arriba del jugador propio (Decision de arquitectura #6). */
+const DISTANCIA_CAMARA = 5.5;
+const ALTURA_CAMARA = 3.2;
+const ALTURA_MIRA = 1.2;
+const DISTANCIA_MIRA = 2.0;
+
+interface EntidadJugador {
+  rig: ChibiRig;
+  anillo: Mesh;
+  hp: SpriteCanvas;
+  hpMostrado: number | null;
+  muerto: boolean;
+  posicionAnterior: { x: number; y: number } | null;
+}
+
+interface TextoDanio {
+  sprite: SpriteCanvas;
+  textoActual: string | null;
+}
+
+/**
+ * Renderer 3D en tercera persona (Three.js): tercer modo del Bridge, junto a `RendererTopDown2D` y
+ * `RendererIsometrico`. Consume el MISMO `EstadoVisual` — solo cambia la proyeccion a una escena
+ * 3D real con camara detras del jugador (B3). Este esqueleto (B1) deja escena/luces/niebla/suelo
+ * placeholder/resize funcionando; `establecerMapa` y el diffing de entidades llegan en B2/B3.
+ *
+ * <p>`redimensionar()` es parte del contrato pero nadie lo invoca hoy (los renderers Pixi usan
+ * `resizeTo` interno) — este renderer se autogestiona con un `ResizeObserver` sobre el contenedor
+ * del canvas, igual de autonomo.
+ */
+export class RendererTresD implements RendererJuego {
+  private static readonly FOV = 60;
+  private static readonly CERCA = 0.1;
+  private static readonly LEJOS = 200;
+  private static readonly NIEBLA_CERCA = 70;
+  private static readonly NIEBLA_LEJOS = 140;
+
+  private renderer: WebGLRenderer | null = null;
+  private scene: Scene | null = null;
+  private camera: PerspectiveCamera | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private canvas: HTMLCanvasElement | null = null;
+  private mapa: Mapa | null = null;
+
+  private sueloPlaceholder: Mesh | null = null;
+  private mundo: Mundo3D | null = null;
+  private zona: Zona3D | null = null;
+
+  private readonly jugadores = new Map<string, EntidadJugador>();
+  private readonly botines = new Map<number, Mesh>();
+  private readonly proyectiles: Mesh[] = [];
+  private readonly textosDanio: TextoDanio[] = [];
+  private ultimaPoseCamara: { posicion: Vector3; mira: Vector3 } | null = null;
+
+  async iniciar(canvas: HTMLCanvasElement): Promise<void> {
+    this.canvas = canvas;
+    const renderer = new WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    const scene = new Scene();
+    scene.background = new Color(COLOR_CIELO);
+    scene.fog = new Fog(COLOR_CIELO, RendererTresD.NIEBLA_CERCA, RendererTresD.NIEBLA_LEJOS);
+
+    const ancho = canvas.parentElement?.clientWidth ?? window.innerWidth;
+    const alto = canvas.parentElement?.clientHeight ?? window.innerHeight;
+    renderer.setSize(ancho, alto, false);
+    const camera = new PerspectiveCamera(RendererTresD.FOV, ancho / Math.max(alto, 1), RendererTresD.CERCA, RendererTresD.LEJOS);
+    camera.position.set(0, 6, 10);
+    camera.lookAt(0, 0, 0);
+
+    scene.add(new AmbientLight(0xffffff, 0.7));
+    const direccional = new DirectionalLight(0xffffff, 1.0);
+    direccional.position.set(-20, 30, 10);
+    scene.add(direccional);
+
+    // Suelo placeholder hasta que llegue establecerMapa() (el mapa baja por REST despues de BIENVENIDA).
+    const suelo = new Mesh(
+      new PlaneGeometry(256, 256),
+      new MeshToonMaterial({ color: COLOR_CESPED, gradientMap: crearGradienteToon() }),
+    );
+    suelo.rotation.x = -Math.PI / 2;
+    scene.add(suelo);
+    this.sueloPlaceholder = suelo;
+
+    this.zona = construirZona3D();
+    scene.add(this.zona.grupo);
+
+    const materialProyectil = new MeshBasicMaterial({ color: COLOR_PROYECTIL });
+    const geometriaProyectil = new SphereGeometry(RADIO_PROYECTIL, 6, 6);
+    for (let i = 0; i < CANTIDAD_PROYECTILES_POOL; i++) {
+      const proyectil = new Mesh(geometriaProyectil, materialProyectil);
+      proyectil.visible = false;
+      scene.add(proyectil);
+      this.proyectiles.push(proyectil);
+    }
+
+    for (let i = 0; i < CANTIDAD_TEXTOS_DANIO; i++) {
+      const sprite = crearSpriteCanvas(48, 24, { x: 0.6, y: 0.3 });
+      sprite.sprite.visible = false;
+      scene.add(sprite.sprite);
+      this.textosDanio.push({ sprite, textoActual: null });
+    }
+
+    this.renderer = renderer;
+    this.scene = scene;
+    this.camera = camera;
+
+    this.resizeObserver = new ResizeObserver(() => this.ajustarAlContenedor());
+    if (canvas.parentElement !== null) {
+      this.resizeObserver.observe(canvas.parentElement);
+    }
+  }
+
+  establecerMapa(mapa: Mapa): void {
+    this.mapa = mapa;
+    if (this.scene === null) {
+      return;
+    }
+    if (this.sueloPlaceholder !== null) {
+      this.scene.remove(this.sueloPlaceholder);
+      this.sueloPlaceholder.geometry.dispose();
+      (this.sueloPlaceholder.material as MeshToonMaterial).dispose();
+      this.sueloPlaceholder = null;
+    }
+    this.mundo?.dispose();
+    if (this.mundo !== null) {
+      this.scene.remove(this.mundo.grupo);
+    }
+    this.mundo = construirMundo3D(mapa);
+    this.scene.add(this.mundo.grupo);
+  }
+
+  renderizar(estado: EstadoVisual, idJugadorPropio: string | null): void {
+    if (this.renderer === null || this.scene === null || this.camera === null) {
+      return; // no iniciado o ya destruido: no-op seguro (el rAF de partida.component sigue vivo durante el swap)
+    }
+    const ahoraMs = performance.now();
+    this.zona?.actualizar(estado.zona);
+    this.actualizarJugadores(estado.jugadores, idJugadorPropio, ahoraMs);
+    this.actualizarProyectiles(estado.proyectiles);
+    this.actualizarBotines(estado.botines, ahoraMs);
+    this.actualizarNumerosDanio(estado.numerosDanio);
+    this.actualizarCamara(estado.jugadores, idJugadorPropio);
+    this.animarMundo(ahoraMs);
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Diffing con retencion (Decision #7): crea/actualiza/quita rigs de chibi segun el snapshot, nunca reconstruye por frame. */
+  private actualizarJugadores(jugadores: readonly JugadorVisual[], idPropio: string | null, ahoraMs: number): void {
+    if (this.scene === null) {
+      return;
+    }
+    const vistos = new Set<string>();
+    for (const jugador of jugadores) {
+      vistos.add(jugador.id);
+      let entidad = this.jugadores.get(jugador.id);
+      if (entidad === undefined) {
+        entidad = this.crearEntidadJugador(jugador);
+        this.jugadores.set(jugador.id, entidad);
+        this.scene.add(entidad.rig.raiz);
+      }
+      this.actualizarEntidadJugador(entidad, jugador, jugador.id === idPropio, ahoraMs);
+    }
+    for (const [id, entidad] of this.jugadores) {
+      if (!vistos.has(id)) {
+        this.destruirEntidadJugador(entidad);
+        this.jugadores.delete(id);
+      }
+    }
+  }
+
+  private crearEntidadJugador(jugador: JugadorVisual): EntidadJugador {
+    const rig = construirChibi(jugador.personaje);
+    rig.fase = faseDesdeId(jugador.id);
+
+    const anillo = new Mesh(
+      new RingGeometry(RADIO_CUERPO_CHIBI * 1.1, RADIO_CUERPO_CHIBI * 1.4, 24),
+      new MeshBasicMaterial({ color: COLOR_ANILLO_PROPIO, side: DoubleSide, transparent: true, opacity: 0.9 }),
+    );
+    anillo.rotation.x = -Math.PI / 2;
+    anillo.position.y = 0.02;
+    anillo.visible = false;
+    rig.raiz.add(anillo);
+
+    const hp = crearSpriteCanvas(64, 8, { x: 0.6, y: 0.15 });
+    hp.sprite.position.y = ALTURA_TOPE_CABEZA + 0.25;
+    rig.raiz.add(hp.sprite);
+
+    return { rig, anillo, hp, hpMostrado: null, muerto: false, posicionAnterior: null };
+  }
+
+  private actualizarEntidadJugador(entidad: EntidadJugador, jugador: JugadorVisual, propio: boolean, ahoraMs: number): void {
+    const distanciaMovida = entidad.posicionAnterior === null
+      ? 0
+      : Math.hypot(jugador.x - entidad.posicionAnterior.x, jugador.y - entidad.posicionAnterior.y);
+    entidad.posicionAnterior = { x: jugador.x, y: jugador.y };
+
+    entidad.rig.raiz.position.copy(aVector3(jugador.x, jugador.y));
+    const muerto = jugador.estadoVida === 'MUERTO';
+    if (muerto !== entidad.muerto) {
+      this.aplicarEstadoVida(entidad, muerto);
+    }
+    if (!muerto) {
+      entidad.rig.raiz.rotation.y = -jugador.angulo;
+    }
+
+    const moviendo = !muerto && distanciaMovida > UMBRAL_MOVIMIENTO_BOBBING;
+    entidad.rig.cuerpo.position.y = ALTURA_CUERPO_CHIBI
+      + (moviendo ? Math.sin((ahoraMs / 1000) * 10 + entidad.rig.fase) * 0.06 : 0);
+
+    entidad.anillo.visible = propio;
+    entidad.hp.sprite.visible = !muerto;
+    if (!muerto && entidad.hpMostrado !== jugador.hp) {
+      entidad.hpMostrado = jugador.hp;
+      this.redibujarHp(entidad.hp, jugador.hp);
+    }
+  }
+
+  /** Muerto: tumba el chibi (rotation.z) y pone TODOS sus materiales en gris; vivo: restaura los colores originales. */
+  private aplicarEstadoVida(entidad: EntidadJugador, muerto: boolean): void {
+    entidad.muerto = muerto;
+    entidad.rig.raiz.rotation.z = muerto ? Math.PI / 2 : 0;
+    const colorGris = 0x8a8f9c;
+    entidad.rig.materiales.forEach((material, indice) => {
+      material.color.setHex(muerto ? colorGris : entidad.rig.coloresOriginales[indice]);
+    });
+  }
+
+  private redibujarHp(hp: SpriteCanvas, valor: number): void {
+    const fraccion = Math.max(0, Math.min(1, valor / VIDA_MAX));
+    const color = fraccion > 0.5 ? '#4ade80' : fraccion > 0.25 ? '#ffcc00' : '#ff4444';
+    hp.redibujar((ctx, ancho, alto) => {
+      ctx.fillStyle = '#111424';
+      ctx.fillRect(0, 0, ancho, alto);
+      if (fraccion > 0) {
+        ctx.fillStyle = color;
+        ctx.fillRect(1, 1, (ancho - 2) * fraccion, alto - 2);
+      }
+    });
+  }
+
+  private destruirEntidadJugador(entidad: EntidadJugador): void {
+    entidad.rig.raiz.removeFromParent();
+    entidad.hp.dispose();
+  }
+
+  /** Pool fijo (Decision #7): visibilidad/posicion por indice, sin crear/destruir geometria por frame. */
+  private actualizarProyectiles(proyectiles: readonly ProyectilVisual[]): void {
+    for (let i = 0; i < this.proyectiles.length; i++) {
+      const mesh = this.proyectiles[i];
+      const proyectil = proyectiles[i];
+      if (proyectil === undefined) {
+        mesh.visible = false;
+        continue;
+      }
+      mesh.visible = true;
+      mesh.position.copy(aVector3(proyectil.x, proyectil.y, ALTURA_CABEZA_CENTRO * 0.6));
+    }
+  }
+
+  private actualizarBotines(botines: readonly BotinVisual[], ahoraMs: number): void {
+    if (this.scene === null) {
+      return;
+    }
+    const vistos = new Set<number>();
+    for (const botin of botines) {
+      vistos.add(botin.id);
+      let mesh = this.botines.get(botin.id);
+      if (mesh === undefined) {
+        const color = botin.tipo === 'BOTIQUIN' ? COLOR_BOTIQUIN : COLOR_ARMA_BOTIN;
+        mesh = new Mesh(new SphereGeometry(0.18, 8, 6), new MeshBasicMaterial({ color }));
+        this.scene.add(mesh);
+        this.botines.set(botin.id, mesh);
+      }
+      const flote = Math.sin((ahoraMs / 1000) * 2 + botin.id) * 0.06;
+      mesh.position.copy(aVector3(botin.x, botin.y, 0.25 + flote));
+      mesh.rotation.y = (ahoraMs / 1000) * 1.2 + botin.id;
+    }
+    for (const [id, mesh] of this.botines) {
+      if (!vistos.has(id)) {
+        mesh.removeFromParent();
+        mesh.geometry.dispose();
+        this.liberarMaterial(mesh.material);
+        this.botines.delete(id);
+      }
+    }
+  }
+
+  /** Numeros de dano flotantes con fade (pool fijo, mismo tope que 2D/ISO): sube y se desvanece con la edad. */
+  private actualizarNumerosDanio(numeros: readonly NumeroDanio[]): void {
+    const ahora = performance.now();
+    for (let i = 0; i < this.textosDanio.length; i++) {
+      const entrada = this.textosDanio[i];
+      const numero = numeros[i];
+      if (numero === undefined) {
+        entrada.sprite.sprite.visible = false;
+        entrada.textoActual = null;
+        continue;
+      }
+      const edad = ahora - numero.creadoEn;
+      if (edad > DURACION_DANIO_MS) {
+        entrada.sprite.sprite.visible = false;
+        entrada.textoActual = null;
+        continue;
+      }
+      const texto = String(numero.cantidad);
+      if (entrada.textoActual !== texto) {
+        entrada.textoActual = texto;
+        entrada.sprite.redibujar((ctx, ancho, alto) => {
+          ctx.font = 'bold 18px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = '#111424';
+          ctx.strokeText(texto, ancho / 2, alto / 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(texto, ancho / 2, alto / 2);
+        });
+      }
+      entrada.sprite.sprite.visible = true;
+      entrada.sprite.sprite.material.opacity = 1 - edad / DURACION_DANIO_MS;
+      entrada.sprite.sprite.position.copy(aVector3(numero.x, numero.y, ALTURA_TOPE_CABEZA + edad * 0.001));
+    }
+  }
+
+  /** Sway de copas + agua "respirando" en color y con oleaje de vertices (B5) — reutiliza los helpers de paleta-mapa. */
+  private animarMundo(ahoraMs: number): void {
+    if (this.mundo === null) {
+      return;
+    }
+    const t = ahoraMs / 1000;
+    for (const arbol of this.mundo.arboles) {
+      arbol.copa.rotation.z = Math.sin(t * 1.5 + arbol.fase) * 0.05;
+    }
+    for (const agua of this.mundo.aguas) {
+      const mezcla = (Math.sin(faseAgua(ahoraMs) * Math.PI * 2) + 1) / 2;
+      agua.mesh.material.color.setHex(lerpColor(agua.colorBase, agua.colorClaro, mezcla));
+      const posiciones = agua.mesh.geometry.attributes['position'];
+      for (let i = 0; i < posiciones.count; i++) {
+        const vx = posiciones.getX(i);
+        const vy = posiciones.getY(i);
+        posiciones.setZ(i, Math.sin(vx * 2 + t + vy) * 0.05);
+      }
+      posiciones.needsUpdate = true;
+    }
+  }
+
+  /** Cámara detrás y arriba del jugador propio, mirando hacia donde apunta (Decision #6); congelada si está muerto/ausente. */
+  private actualizarCamara(jugadores: readonly JugadorVisual[], idPropio: string | null): void {
+    if (this.camera === null) {
+      return;
+    }
+    const propio = jugadores.find((jugador) => jugador.id === idPropio);
+    if (propio === undefined || propio.estadoVida !== 'VIVO') {
+      if (this.ultimaPoseCamara !== null) {
+        this.camera.position.copy(this.ultimaPoseCamara.posicion);
+        this.camera.lookAt(this.ultimaPoseCamara.mira);
+      }
+      return;
+    }
+    const centro = aVector3(propio.x, propio.y, 0);
+    const direccion = direccionDesdeAngulo(propio.angulo);
+    const posicion = centro.clone().addScaledVector(direccion, -DISTANCIA_CAMARA).add(new Vector3(0, ALTURA_CAMARA, 0));
+    const mira = centro.clone().addScaledVector(direccion, DISTANCIA_MIRA).add(new Vector3(0, ALTURA_MIRA, 0));
+    this.camera.position.copy(posicion);
+    this.camera.lookAt(mira);
+    this.ultimaPoseCamara = { posicion, mira };
+  }
+
+  redimensionar(): void {
+    this.ajustarAlContenedor();
+  }
+
+  destruir(): void {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    this.mundo?.dispose();
+    this.zona?.dispose();
+    // Los Sprite (barras de HP, numeros de dano) no son Mesh: el traverse de abajo no los alcanza, se liberan aparte.
+    for (const entidad of this.jugadores.values()) {
+      entidad.hp.dispose();
+    }
+    for (const texto of this.textosDanio) {
+      texto.sprite.dispose();
+    }
+    if (this.scene !== null) {
+      this.scene.traverse((objeto) => {
+        if (objeto instanceof Mesh) {
+          objeto.geometry.dispose();
+          this.liberarMaterial(objeto.material);
+        }
+      });
+    }
+    this.renderer?.dispose();
+    this.renderer?.forceContextLoss();
+    this.renderer = null;
+    this.scene = null;
+    this.camera = null;
+    this.canvas = null;
+    this.mapa = null;
+    this.sueloPlaceholder = null;
+    this.mundo = null;
+    this.zona = null;
+    this.jugadores.clear();
+    this.botines.clear();
+    this.proyectiles.length = 0;
+    this.textosDanio.length = 0;
+    this.ultimaPoseCamara = null;
+  }
+
+  private liberarMaterial(material: Material | Material[]): void {
+    const materiales = Array.isArray(material) ? material : [material];
+    for (const unMaterial of materiales) {
+      for (const valor of Object.values(unMaterial)) {
+        if (valor instanceof Texture) {
+          valor.dispose();
+        }
+      }
+      unMaterial.dispose();
+    }
+  }
+
+  private ajustarAlContenedor(): void {
+    if (this.renderer === null || this.camera === null || this.canvas === null) {
+      return;
+    }
+    const contenedor = this.canvas.parentElement;
+    const ancho = contenedor?.clientWidth ?? window.innerWidth;
+    const alto = contenedor?.clientHeight ?? window.innerHeight;
+    this.renderer.setSize(ancho, alto, false);
+    this.camera.aspect = ancho / Math.max(alto, 1);
+    this.camera.updateProjectionMatrix();
+  }
+}

@@ -66,6 +66,16 @@ export class ConexionPartidaService {
     this.estado.set('desconectado');
   }
 
+  /**
+   * Corta el backoff de reconexion SIN cerrar el socket: tras FIN_PARTIDA el servidor va a cerrar
+   * cuando venza la gracia, y reconectarse a una partida muerta seria un ciclo infinito de
+   * "conectando" (el podio sigue visible; los ultimos snapshots ya llegaron).
+   */
+  dejarDeReconectar(): void {
+    this.cerradoManualmente = true;
+    this.cancelarReconexion();
+  }
+
   private abrir(): void {
     this.estado.set('conectando');
     this.bienvenidaRecibida = false;

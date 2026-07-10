@@ -1,16 +1,34 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { especificacionDe, hexCss, Personaje } from '../models/personajes';
+import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
+import { especificacionDe, hexCss, Personaje, rutaRetrato } from '../models/personajes';
 
 /**
- * Retrato SVG inline de un personaje (arte 100% vectorial en codigo, cero assets de imagen —
- * decision confirmada). Rasgos distintivos por especie via `@switch`; el contorno 3px
- * `#111424` es la firma visual compartida con los chibis del canvas (`render/dibujo-chibi.ts`,
- * B4) aunque ambos dibujos son implementaciones independientes (DOM vs PixiJS).
+ * Retrato de un personaje: PNG de `public/personajes/` (calidad de render, los archivos los provee
+ * el usuario — decision confirmada en la fase de rediseno visual) con FALLBACK automatico al SVG
+ * vectorial si el archivo falta (`(error)` del `<img>`; el 404 en consola es esperado e inocuo).
+ * El SVG conserva la firma visual de los chibis del canvas (contorno 3px `#111424`).
  */
 @Component({
   selector: 'app-personaje-retrato',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [
+    `
+      .retrato-img {
+        display: block;
+        object-fit: cover;
+      }
+    `,
+  ],
   template: `
+    @if (!imagenFallo()) {
+      <img
+        [src]="ruta()"
+        [width]="tamano()"
+        [height]="tamano()"
+        [alt]="nombre()"
+        (error)="imagenFallo.set(true)"
+        class="retrato-img"
+      />
+    } @else {
     <svg viewBox="0 0 64 64" [attr.width]="tamano()" [attr.height]="tamano()" role="img" [attr.aria-label]="nombre()">
       @switch (personaje()) {
         @case ('GATO') {
@@ -60,12 +78,16 @@ import { especificacionDe, hexCss, Personaje } from '../models/personajes';
         }
       }
     </svg>
+    }
   `,
 })
 export class PersonajeRetratoComponent {
   readonly personaje = input.required<Personaje>();
   readonly tamano = input<number>(64);
 
+  /** Se resetea solo al cambiar el personaje (el podio reusa la instancia con otro personaje). */
+  protected readonly imagenFallo = linkedSignal({ source: this.personaje, computation: () => false });
+  protected readonly ruta = computed(() => rutaRetrato(this.personaje()));
   protected readonly nombre = computed(() => especificacionDe(this.personaje()).nombre);
   protected readonly colorCuerpo = computed(() => hexCss(especificacionDe(this.personaje()).colorCuerpo));
   protected readonly colorDetalle = computed(() => hexCss(especificacionDe(this.personaje()).colorDetalle));

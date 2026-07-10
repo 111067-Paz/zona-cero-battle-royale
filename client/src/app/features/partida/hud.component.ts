@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { PersonajeRetratoComponent } from '../../shared/personaje-retrato.component';
 import { EntradaService } from './entrada.service';
 import { EstadoPartidaStore } from './estado-partida.store';
 
@@ -12,6 +13,7 @@ import { EstadoPartidaStore } from './estado-partida.store';
 @Component({
   selector: 'app-hud',
   standalone: true,
+  imports: [PersonajeRetratoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (fueraDeZona()) {
@@ -20,7 +22,9 @@ import { EstadoPartidaStore } from './estado-partida.store';
     @if (jugador(); as yo) {
       <div class="hud-superior-izq">
         <div class="panel-hp">
-          <div class="retrato"></div>
+          <div class="retrato">
+            <app-personaje-retrato [personaje]="yo.personaje" [tamano]="28" />
+          </div>
           <div class="hp">
             <div class="hp__barra">
               <div class="hp__relleno" [style.width.%]="porcentajeHp(yo.hp)"></div>
@@ -138,6 +142,9 @@ import { EstadoPartidaStore } from './estado-partida.store';
         border-radius: 50%;
         border: 3px solid var(--color-thick-border);
         background: var(--color-radar-blue);
+        overflow: hidden;
+        display: grid;
+        place-items: center;
       }
       .hp {
         display: flex;
