@@ -19,7 +19,8 @@
       "conectado": true,
       "arma": "PISTOLA",
       "kills": 2,
-      "botiquines": 1
+      "botiquines": 1,
+      "personaje": "GATO"
     }
   ],
   "proyectiles": [

@@ -1,5 +1,6 @@
 package ar.pazluciano.battleroyale.plataforma.entities;
 
+import ar.pazluciano.battleroyale.comun.personajes.Personaje;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -55,6 +56,11 @@ public class Usuario {
     @Column(name = "fecha_creacion", nullable = false, updatable = false)
     private LocalDateTime fechaCreacion;
 
+    /** Aspecto chibi elegido (PLAN §15): viaja al snapshot via el ticket, visible para todos. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Personaje personaje;
+
     /** Constructor de conveniencia: solo lo que el registro necesita (PLAN §4.2). */
     public Usuario(String nombreUsuario, String email, String passwordHash) {
         this.nombreUsuario = nombreUsuario;
@@ -68,6 +74,9 @@ public class Usuario {
         this.activo = true;
         if (this.rol == null) {
             this.rol = Rol.JUGADOR;
+        }
+        if (this.personaje == null) {
+            this.personaje = Personaje.GATO;
         }
     }
 }

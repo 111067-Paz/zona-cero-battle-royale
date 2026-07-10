@@ -46,6 +46,12 @@ export class AuthService {
     this.usuarioSignal.set(null);
   }
 
+  /** Pisa el usuario persistido (p.ej. tras cambiar el personaje) sin tocar los tokens. */
+  actualizarUsuario(usuario: UsuarioDTO): void {
+    localStorage.setItem(CLAVE_USUARIO, JSON.stringify(usuario));
+    this.usuarioSignal.set(usuario);
+  }
+
   accessTokenActual(): string | null {
     return localStorage.getItem(CLAVE_ACCESS_TOKEN);
   }

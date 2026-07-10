@@ -50,9 +50,6 @@ public class GameLoop {
 
     private static final double NANOS_POR_SEGUNDO = 1_000_000_000.0;
 
-    /** Mapa placeholder de la Fase 0; el mapa real (AABBs, spawns) llega en la Fase 1. */
-    private static final String ID_MAPA = "campo-01";
-
     private final Partida partida;
     private final ConfiguracionJuego config;
     private final EmisorPartida emisor;
@@ -257,6 +254,7 @@ public class GameLoop {
         ConexionJugador conexion = unirse.getConexion();
         String idJugador = conexion.idJugador();
         Optional<Jugador> existente = partida.buscarJugador(idJugador);
+        ensamblador.registrarPersonaje(idJugador, unirse.getPersonaje());
 
         if (existente.isEmpty()) {
             partida.agregarJugador(idJugador);
@@ -285,6 +283,7 @@ public class GameLoop {
     private void retirar(String idJugador) {
         partida.quitarJugador(idJugador);
         emisor.quitar(idJugador);
+        ensamblador.quitarPersonaje(idJugador);
     }
 
     private void aplicarInputsOrdenados(List<ComandoInput> inputs) {
@@ -328,7 +327,7 @@ public class GameLoop {
                 .idJugador(idJugador)
                 .idPartida(partida.getId())
                 .config(configBienvenida)
-                .idMapa(ID_MAPA)
+                .idMapa(partida.getMapa().getId())
                 .build();
     }
 }

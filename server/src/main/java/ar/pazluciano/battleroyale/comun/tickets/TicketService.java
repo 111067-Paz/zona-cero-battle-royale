@@ -1,5 +1,6 @@
 package ar.pazluciano.battleroyale.comun.tickets;
 
+import ar.pazluciano.battleroyale.comun.personajes.Personaje;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,9 +27,10 @@ public class TicketService {
 
     private final Map<String, Entrada> tickets = new ConcurrentHashMap<>();
 
-    public String crear(Long idUsuario, String idPartida) {
+    public String crear(Long idUsuario, String idPartida, Personaje personaje) {
         String ticket = UUID.randomUUID().toString();
-        tickets.put(ticket, new Entrada(idUsuario, idPartida, System.currentTimeMillis() + TTL_MILLIS));
+        tickets.put(ticket,
+                new Entrada(idUsuario, idPartida, personaje, System.currentTimeMillis() + TTL_MILLIS));
         return ticket;
     }
 
@@ -41,7 +43,8 @@ public class TicketService {
         if (entrada == null || entrada.getExpiraEnMillis() < System.currentTimeMillis()) {
             return Optional.empty();
         }
-        return Optional.of(new IdentidadTicket(entrada.getIdUsuario(), entrada.getIdPartida()));
+        return Optional.of(
+                new IdentidadTicket(entrada.getIdUsuario(), entrada.getIdPartida(), entrada.getPersonaje()));
     }
 
     /** Sweeper (PLAN §3.1): barre tickets vencidos que nadie canjeo, cada minuto. */
@@ -56,6 +59,7 @@ public class TicketService {
     private static class Entrada {
         private final Long idUsuario;
         private final String idPartida;
+        private final Personaje personaje;
         private final long expiraEnMillis;
     }
 }

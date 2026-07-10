@@ -1,5 +1,6 @@
 package ar.pazluciano.battleroyale.comun.tickets;
 
+import ar.pazluciano.battleroyale.comun.personajes.Personaje;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -18,6 +19,7 @@ class TicketServiceTest {
 
     private static final Long ID_USUARIO = 7L;
     private static final String ID_PARTIDA = "partida-abc";
+    private static final Personaje PERSONAJE = Personaje.DINO;
 
     private TicketService ticketService;
 
@@ -30,7 +32,7 @@ class TicketServiceTest {
     @DisplayName("un ticket recien creado se canjea y devuelve usuario y partida correctos")
     void crear_yCanjear_devuelveIdentidadCorrecta() {
         // GIVEN
-        String ticket = ticketService.crear(ID_USUARIO, ID_PARTIDA);
+        String ticket = ticketService.crear(ID_USUARIO, ID_PARTIDA, PERSONAJE);
 
         // WHEN
         Optional<IdentidadTicket> resultado = ticketService.canjear(ticket);
@@ -39,13 +41,14 @@ class TicketServiceTest {
         assertTrue(resultado.isPresent());
         assertEquals(ID_USUARIO, resultado.get().getIdUsuario());
         assertEquals(ID_PARTIDA, resultado.get().getIdPartida());
+        assertEquals(PERSONAJE, resultado.get().getPersonaje());
     }
 
     @Test
     @DisplayName("un ticket ya canjeado no puede volver a usarse (delete-on-use)")
     void canjear_segundaVezElMismoTicket_devuelveEmpty() {
         // GIVEN
-        String ticket = ticketService.crear(ID_USUARIO, ID_PARTIDA);
+        String ticket = ticketService.crear(ID_USUARIO, ID_PARTIDA, PERSONAJE);
         ticketService.canjear(ticket);
 
         // WHEN
@@ -80,7 +83,7 @@ class TicketServiceTest {
     void canjear_ticketVencido_devuelveEmpty() {
         // GIVEN: se crea el ticket y se envejece su entrada por reflection (el TTL real es de 30s,
         // demasiado para un test unitario) — simula el paso del tiempo sin dormir el hilo.
-        String ticket = ticketService.crear(ID_USUARIO, ID_PARTIDA);
+        String ticket = ticketService.crear(ID_USUARIO, ID_PARTIDA, PERSONAJE);
         @SuppressWarnings("unchecked")
         Map<String, Object> tickets =
                 (Map<String, Object>) ReflectionTestUtils.getField(ticketService, "tickets");

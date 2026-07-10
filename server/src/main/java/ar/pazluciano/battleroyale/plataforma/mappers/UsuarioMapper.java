@@ -12,6 +12,7 @@ public class UsuarioMapper {
                 .id(entity.getId())
                 .nombreUsuario(entity.getNombreUsuario())
                 .email(entity.getEmail())
+                .personaje(entity.getPersonaje())
                 .build();
     }
 }

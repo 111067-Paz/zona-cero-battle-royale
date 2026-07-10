@@ -1,7 +1,29 @@
 import { Application, Graphics, Text } from 'pixi.js';
 import { DecoracionMapa, Mapa, RectanguloMapa } from '../../../models/mapa';
 import { BotinVisual, EstadoVisual, JugadorVisual, NumeroDanio, ProyectilVisual, ZonaVisual } from '../estado-visual';
+import { dibujarChibi } from './dibujo-chibi';
+import {
+  COLOR_CAMINO,
+  COLOR_FLOR_CENTRO,
+  COLOR_FLOR_PETALO,
+  COLOR_LAGO,
+  COLOR_LAGO_CLARO,
+  COLOR_RIO,
+  COLOR_RIO_CLARO,
+  especificacionObstaculo,
+  EspecificacionObstaculo,
+  faseAgua,
+  lerpColor,
+  semillaDeterministica,
+} from './paleta-mapa';
 import { RendererJuego } from './renderer-juego';
+
+interface RectanguloPantalla {
+  x: number;
+  y: number;
+  ancho: number;
+  alto: number;
+}
 
 /**
  * Renderer 2D top-down con PixiJS (WebGL), la implementacion principal del MVP (PLAN §2.5).
@@ -24,12 +46,8 @@ export class RendererTopDown2D implements RendererJuego {
 
   private static readonly COLOR_VOID = 0x0f1a36;
   private static readonly COLOR_CESPED = 0x82c341;
-  private static readonly COLOR_OBSTACULO = 0xb5834a;
-  private static readonly COLOR_RIO = 0x3aa7d8;
   private static readonly COLOR_BORDE = 0x111424;
   private static readonly COLOR_PROPIO = 0x4ade80;
-  private static readonly COLOR_OTRO = 0xff6b9d;
-  private static readonly COLOR_MUERTO = 0x8a8f9c;
   private static readonly COLOR_PROYECTIL = 0xffee44;
   private static readonly COLOR_ZONA_ACTUAL = 0x4ade80;
   private static readonly COLOR_ZONA_PROXIMA = 0xffcc00;
@@ -137,38 +155,155 @@ export class RendererTopDown2D implements RendererJuego {
       .fill(RendererTopDown2D.COLOR_CESPED)
       .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
 
+    const ahoraMs = performance.now();
     for (const decoracion of this.mapa.decoraciones) {
-      this.dibujarRectangulo(decoracion, camara, centroX, centroY, anchoPantalla, altoPantalla,
-        this.colorDecoracion(decoracion), false);
+      this.dibujarDecoracion(decoracion, camara, centroX, centroY, anchoPantalla, altoPantalla, ahoraMs);
     }
     for (const obstaculo of this.mapa.obstaculos) {
-      this.dibujarRectangulo(obstaculo, camara, centroX, centroY, anchoPantalla, altoPantalla,
-        RendererTopDown2D.COLOR_OBSTACULO, true);
+      this.dibujarObstaculo(obstaculo, camara, centroX, centroY, anchoPantalla, altoPantalla);
     }
   }
 
-  private dibujarRectangulo(
-    rectangulo: RectanguloMapa,
+  private rectanguloPantalla(
+    rectangulo: RectanguloMapa | DecoracionMapa,
+    camara: { x: number; y: number },
+    centroX: number,
+    centroY: number,
+  ): RectanguloPantalla {
+    const escala = RendererTopDown2D.ESCALA;
+    return {
+      x: (rectangulo.x - camara.x) * escala + centroX,
+      y: (rectangulo.y - camara.y) * escala + centroY,
+      ancho: rectangulo.ancho * escala,
+      alto: rectangulo.alto * escala,
+    };
+  }
+
+  private dibujarDecoracion(
+    decoracion: DecoracionMapa,
     camara: { x: number; y: number },
     centroX: number,
     centroY: number,
     anchoPantalla: number,
     altoPantalla: number,
-    color: number,
-    conBorde: boolean,
+    ahoraMs: number,
   ): void {
-    const escala = RendererTopDown2D.ESCALA;
-    const sx = (rectangulo.x - camara.x) * escala + centroX;
-    const sy = (rectangulo.y - camara.y) * escala + centroY;
-    const sancho = rectangulo.ancho * escala;
-    const salto = rectangulo.alto * escala;
-    if (!this.enPantalla(sx, sy, sancho, salto, anchoPantalla, altoPantalla)) {
+    const rect = this.rectanguloPantalla(decoracion, camara, centroX, centroY);
+    if (!this.enPantalla(rect.x, rect.y, rect.ancho, rect.alto, anchoPantalla, altoPantalla)) {
       return;
     }
-    const dibujo = this.graficos.rect(sx, sy, sancho, salto).fill(color);
-    if (conBorde) {
-      dibujo.stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
+    switch (decoracion.tipo) {
+      case 'RIO':
+        this.graficos.rect(rect.x, rect.y, rect.ancho, rect.alto).fill(this.colorAgua(COLOR_RIO, COLOR_RIO_CLARO, ahoraMs));
+        return;
+      case 'LAGO':
+        this.graficos.rect(rect.x, rect.y, rect.ancho, rect.alto).fill(this.colorAgua(COLOR_LAGO, COLOR_LAGO_CLARO, ahoraMs));
+        return;
+      case 'CAMINO':
+        this.graficos.rect(rect.x, rect.y, rect.ancho, rect.alto).fill(COLOR_CAMINO);
+        return;
+      case 'FLOR':
+        this.dibujarFlores(decoracion, rect);
+        return;
+      default:
+        this.graficos.rect(rect.x, rect.y, rect.ancho, rect.alto).fill(RendererTopDown2D.COLOR_CESPED);
     }
+  }
+
+  /** Flores deterministicas (sin Math.random): mismas coordenadas -> mismas flores, siempre. */
+  private dibujarFlores(decoracion: DecoracionMapa, rect: RectanguloPantalla): void {
+    const cantidad = 3;
+    for (let i = 0; i < cantidad; i++) {
+      const tx = semillaDeterministica(decoracion.x + i * 7.3, decoracion.y + i * 3.1);
+      const ty = semillaDeterministica(decoracion.y + i * 11.7, decoracion.x + i * 5.9);
+      const px = rect.x + tx * rect.ancho;
+      const py = rect.y + ty * rect.alto;
+      this.graficos.circle(px, py, 2.5).fill(COLOR_FLOR_PETALO);
+      this.graficos.circle(px, py, 1).fill(COLOR_FLOR_CENTRO);
+    }
+  }
+
+  /** Color del agua "respirando" entre dos tonos con el reloj — animado sin estado propio. */
+  private colorAgua(base: number, claro: number, ahoraMs: number): number {
+    const t = (Math.sin(faseAgua(ahoraMs) * Math.PI * 2) + 1) / 2;
+    return lerpColor(base, claro, t);
+  }
+
+  private dibujarObstaculo(
+    obstaculo: RectanguloMapa,
+    camara: { x: number; y: number },
+    centroX: number,
+    centroY: number,
+    anchoPantalla: number,
+    altoPantalla: number,
+  ): void {
+    const rect = this.rectanguloPantalla(obstaculo, camara, centroX, centroY);
+    if (!this.enPantalla(rect.x, rect.y, rect.ancho, rect.alto, anchoPantalla, altoPantalla)) {
+      return;
+    }
+    const especificacion = especificacionObstaculo(obstaculo.tipo);
+    switch (obstaculo.tipo) {
+      case 'CAJA':
+        this.dibujarCaja(rect, especificacion);
+        return;
+      case 'ARBOL':
+        this.dibujarArbol(rect, especificacion);
+        return;
+      case 'ROCA':
+        this.dibujarRoca(rect, especificacion);
+        return;
+      case 'CARPA':
+        this.dibujarCarpa(rect, especificacion);
+        return;
+      default: {
+        const exhaustivo: never = obstaculo.tipo;
+        throw new Error(`Tipo de obstaculo sin dibujo: ${exhaustivo}`);
+      }
+    }
+  }
+
+  private dibujarCaja(rect: RectanguloPantalla, especificacion: EspecificacionObstaculo): void {
+    this.graficos
+      .rect(rect.x, rect.y, rect.ancho, rect.alto)
+      .fill(especificacion.colorPrincipal)
+      .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
+    for (let i = 1; i <= 2; i++) {
+      const fy = rect.y + (rect.alto * i) / 3;
+      this.graficos.moveTo(rect.x, fy).lineTo(rect.x + rect.ancho, fy)
+        .stroke({ width: 2, color: especificacion.colorSecundario });
+    }
+  }
+
+  private dibujarArbol(rect: RectanguloPantalla, especificacion: EspecificacionObstaculo): void {
+    const cx = rect.x + rect.ancho / 2;
+    const cy = rect.y + rect.alto / 2;
+    const radioCopa = Math.min(rect.ancho, rect.alto) / 2;
+    const anchoTronco = rect.ancho * 0.25;
+    this.graficos
+      .rect(cx - anchoTronco / 2, cy, anchoTronco, rect.alto / 2)
+      .fill(especificacion.colorSecundario)
+      .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
+    this.graficos
+      .circle(cx, cy, radioCopa)
+      .fill(especificacion.colorPrincipal)
+      .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
+  }
+
+  private dibujarRoca(rect: RectanguloPantalla, especificacion: EspecificacionObstaculo): void {
+    this.graficos
+      .roundRect(rect.x, rect.y, rect.ancho, rect.alto, Math.min(rect.ancho, rect.alto) * 0.3)
+      .fill(especificacion.colorPrincipal)
+      .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
+  }
+
+  private dibujarCarpa(rect: RectanguloPantalla, especificacion: EspecificacionObstaculo): void {
+    const apexX = rect.x + rect.ancho / 2;
+    this.graficos
+      .poly([apexX, rect.y, rect.x, rect.y + rect.alto, rect.x + rect.ancho, rect.y + rect.alto])
+      .fill(especificacion.colorPrincipal)
+      .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
+    const alturaBase = rect.alto * 0.25;
+    this.graficos.rect(rect.x, rect.y + rect.alto - alturaBase, rect.ancho, alturaBase).fill(especificacion.colorSecundario);
   }
 
   private dibujarJugador(x: number, y: number, jugador: JugadorVisual, propio: boolean): void {
@@ -181,15 +316,7 @@ export class RendererTopDown2D implements RendererJuego {
         .lineTo(finX, finY)
         .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
     }
-    const color = muerto
-      ? RendererTopDown2D.COLOR_MUERTO
-      : propio
-        ? RendererTopDown2D.COLOR_PROPIO
-        : RendererTopDown2D.COLOR_OTRO;
-    this.graficos
-      .circle(x, y, RendererTopDown2D.RADIO_PX)
-      .fill(color)
-      .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
+    dibujarChibi(this.graficos, x, y, RendererTopDown2D.RADIO_PX, jugador.personaje, { muerto, propio });
     if (!muerto) {
       this.dibujarBarraHp(x, y, jugador.hp);
     }
@@ -303,10 +430,6 @@ export class RendererTopDown2D implements RendererJuego {
       return 0xffcc00;
     }
     return 0xff4444;
-  }
-
-  private colorDecoracion(decoracion: DecoracionMapa): number {
-    return decoracion.tipo === 'RIO' ? RendererTopDown2D.COLOR_RIO : RendererTopDown2D.COLOR_CESPED;
   }
 
   private enPantalla(

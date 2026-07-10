@@ -4,11 +4,14 @@
  * dibujar el fondo; no llega por snapshots porque no cambia durante la partida.
  */
 
+export type TipoObstaculo = 'CAJA' | 'ARBOL' | 'ROCA' | 'CARPA';
+
 export interface RectanguloMapa {
   x: number;
   y: number;
   ancho: number;
   alto: number;
+  tipo: TipoObstaculo;
 }
 
 export interface DecoracionMapa {

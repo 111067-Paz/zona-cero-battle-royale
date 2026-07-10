@@ -4,6 +4,8 @@
  * (TypeScript obliga a cubrir todos los casos). Cero `any`.
  */
 
+import type { Personaje } from './personajes';
+
 export const VERSION_PROTOCOLO = 1 as const;
 export type Version = typeof VERSION_PROTOCOLO;
 
@@ -77,6 +79,7 @@ export interface JugadorSnapshot {
   kills: number;
   /** Botiquines en inventario (0-3, R28), para el quick-slot del HUD. */
   botiquines: number;
+  personaje: Personaje;
 }
 
 export interface ProyectilSnapshot {

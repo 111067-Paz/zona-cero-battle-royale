@@ -1,5 +1,6 @@
 package ar.pazluciano.battleroyale.juego.protocolo;
 
+import ar.pazluciano.battleroyale.comun.personajes.Personaje;
 import ar.pazluciano.battleroyale.juego.dominio.combate.TipoArma;
 import ar.pazluciano.battleroyale.juego.dominio.partida.EstadoVida;
 import lombok.AllArgsConstructor;
@@ -33,4 +34,7 @@ public class JugadorSnapshot {
 
     /** Botiquines en inventario (0-3, R28), para el quick-slot del HUD. */
     private int botiquines;
+
+    /** Aspecto elegido por el usuario (o el que le toco a un bot en la rotacion). */
+    private Personaje personaje;
 }

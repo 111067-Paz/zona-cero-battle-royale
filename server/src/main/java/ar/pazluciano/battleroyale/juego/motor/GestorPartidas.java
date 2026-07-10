@@ -1,6 +1,7 @@
 package ar.pazluciano.battleroyale.juego.motor;
 
 import ar.pazluciano.battleroyale.comun.config.ConfiguracionJuego;
+import ar.pazluciano.battleroyale.comun.personajes.Personaje;
 import ar.pazluciano.battleroyale.juego.dominio.bots.FabricaAsaltante;
 import ar.pazluciano.battleroyale.juego.dominio.bots.FabricaExplorador;
 import ar.pazluciano.battleroyale.juego.dominio.bots.FabricaFrancotirador;
@@ -41,8 +42,6 @@ import java.util.concurrent.ThreadLocalRandom;
 @RequiredArgsConstructor
 public class GestorPartidas {
 
-    private static final String ID_MAPA_LOCAL = "campo-01";
-
     private final ConfiguracionJuego config;
     private final ObjectMapper objectMapper;
     private final CargadorMapas cargadorMapas;
@@ -68,13 +67,14 @@ public class GestorPartidas {
     public GameLoop crearPartida(List<Long> idsHumanos) {
         String idPartida = UUID.randomUUID().toString();
         long semilla = ThreadLocalRandom.current().nextLong();
-        MapaJuego mapa = cargadorMapas.mapaJuego(ID_MAPA_LOCAL);
+        MapaJuego mapa = cargadorMapas.mapaJuego(mapaAlAzar());
         Partida partida = new Partida(idPartida, mapa, parametrosDesdeConfig(), cicloDesdeConfig(),
                 zonaDesdeConfig(), semilla);
         int cantidadBots = Math.max(0, config.getJugadoresPorPartida() - idsHumanos.size());
-        agregarBots(partida, cantidadBots);
+        EnsambladorSnapshot ensamblador = new EnsambladorSnapshot();
+        agregarBots(partida, cantidadBots, ensamblador);
         EmisorPartida emisor = new EmisorPartida(objectMapper);
-        GameLoop loop = new GameLoop(partida, config, emisor, new EnsambladorSnapshot(), publicadorEventos);
+        GameLoop loop = new GameLoop(partida, config, emisor, ensamblador, publicadorEventos);
         loops.put(idPartida, loop);
         loop.iniciar();
         log.info("Partida {} creada: {} humanos + {} bots", idPartida, idsHumanos.size(), cantidadBots);
@@ -102,14 +102,26 @@ public class GestorPartidas {
     /**
      * Llena la partida con {@code cantidadBots}, ROTANDO por los arquetipos (Abstract Factory):
      * asaltante, francotirador, explorador. La rotacion es deterministica; la variedad de armas
-     * sale de que cada arquetipo trae la suya, coherente con su IA.
+     * sale de que cada arquetipo trae la suya, coherente con su IA. El personaje visual rota por
+     * su propia cuenta ({@code Personaje.values()}) — no tiene relacion con el arquetipo de IA.
+     * Se registra ANTES de {@code loop.iniciar()}: el hilo del loop lo ve por happens-before del
+     * scheduler, sin necesitar sincronizacion.
      */
-    private void agregarBots(Partida partida, int cantidadBots) {
+    private void agregarBots(Partida partida, int cantidadBots, EnsambladorSnapshot ensamblador) {
         List<FabricaParticipante> arquetipos = List.of(
                 new FabricaAsaltante(), new FabricaFrancotirador(), new FabricaExplorador());
+        Personaje[] personajes = Personaje.values();
         for (int i = 0; i < cantidadBots; i++) {
-            partida.agregarParticipante("bot-" + i, arquetipos.get(i % arquetipos.size()));
+            String idBot = "bot-" + i;
+            partida.agregarParticipante(idBot, arquetipos.get(i % arquetipos.size()));
+            ensamblador.registrarPersonaje(idBot, personajes[i % personajes.length]);
         }
+    }
+
+    /** Sorteo simple entre los mapas cargados (Decision de arquitectura #5): un mapa distinto por partida. */
+    private String mapaAlAzar() {
+        List<String> ids = cargadorMapas.idsDisponibles();
+        return ids.get(ThreadLocalRandom.current().nextInt(ids.size()));
     }
 
     private ParametrosSimulacion parametrosDesdeConfig() {

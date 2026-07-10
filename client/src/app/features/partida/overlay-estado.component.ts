@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { Personaje } from '../../models/personajes';
+import { PersonajeRetratoComponent } from '../../shared/personaje-retrato.component';
 import { EstadoPartidaStore } from './estado-partida.store';
 
 /**
@@ -11,6 +13,7 @@ import { EstadoPartidaStore } from './estado-partida.store';
 @Component({
   selector: 'app-overlay-estado',
   standalone: true,
+  imports: [PersonajeRetratoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (estado() === 'EN_LOBBY') {
@@ -18,6 +21,11 @@ import { EstadoPartidaStore } from './estado-partida.store';
         <div class="panel">
           <h2>ESPERANDO JUGADORES</h2>
           <p>{{ cantidadJugadores() }} en la sala</p>
+          <div class="roster">
+            @for (jugador of jugadoresLobby(); track jugador.id) {
+              <app-personaje-retrato [personaje]="jugador.personaje" [tamano]="40" />
+            }
+          </div>
         </div>
       </div>
     }
@@ -32,6 +40,7 @@ import { EstadoPartidaStore } from './estado-partida.store';
       <div class="overlay overlay--podio">
         <div class="panel panel--podio">
           <h2>{{ esGanador(podio.ganador) ? '¡VICTORIA!' : 'FIN DE LA PARTIDA' }}</h2>
+          <app-personaje-retrato [personaje]="personajeDe(podio.ganador)" [tamano]="72" />
           <p class="ganador">Ganador: {{ corto(podio.ganador) }}</p>
           <ul class="tabla-kills">
             @for (fila of tablaKills(podio.killsPorJugador); track fila.id) {
@@ -79,6 +88,13 @@ import { EstadoPartidaStore } from './estado-partida.store';
         font-size: 14px;
         opacity: 0.85;
       }
+      .roster {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 14px;
+      }
       .numero-regresivo {
         font-size: 120px;
         font-weight: 800;
@@ -118,6 +134,7 @@ export class OverlayEstadoComponent {
   readonly resultado = this.store.resultadoFinal;
 
   readonly cantidadJugadores = computed(() => this.store.ultimoSnapshot()?.jugadores.length ?? 0);
+  readonly jugadoresLobby = computed(() => this.store.ultimoSnapshot()?.jugadores ?? []);
 
   readonly segundosRestantes = computed(() => {
     const snapshot = this.store.ultimoSnapshot();
@@ -130,6 +147,10 @@ export class OverlayEstadoComponent {
 
   esGanador(idGanador: string): boolean {
     return idGanador === this.store.idJugador();
+  }
+
+  personajeDe(idJugador: string): Personaje {
+    return this.store.ultimoSnapshot()?.jugadores.find((jugador) => jugador.id === idJugador)?.personaje ?? 'GATO';
   }
 
   corto(id: string): string {

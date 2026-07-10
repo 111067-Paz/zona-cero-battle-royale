@@ -19,4 +19,7 @@ public class RectanguloMapa {
     private double y;
     private double ancho;
     private double alto;
+
+    /** CAJA | ARBOL | ROCA | CARPA. Normalizado y validado al cargar (CargadorMapas): nunca null en el wire. */
+    private String tipo;
 }

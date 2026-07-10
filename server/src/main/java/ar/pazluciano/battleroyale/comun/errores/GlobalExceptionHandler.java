@@ -3,6 +3,7 @@ package ar.pazluciano.battleroyale.comun.errores;
 import ar.pazluciano.battleroyale.juego.motor.UsuarioYaEnColaException;
 import ar.pazluciano.battleroyale.plataforma.exceptions.CredencialesInvalidasException;
 import ar.pazluciano.battleroyale.plataforma.exceptions.DemasiadosIntentosException;
+import ar.pazluciano.battleroyale.plataforma.exceptions.PersonajeInvalidoException;
 import ar.pazluciano.battleroyale.plataforma.exceptions.TokenInvalidoException;
 import ar.pazluciano.battleroyale.plataforma.exceptions.UsuarioYaExisteException;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorApi> handleDemasiadosIntentos(DemasiadosIntentosException exception) {
         log.warn("Rate limit excedido: {}", exception.getMessage());
         return construir(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());
+    }
+
+    @ExceptionHandler(PersonajeInvalidoException.class)
+    public ResponseEntity<ErrorApi> handlePersonajeInvalido(PersonajeInvalidoException exception) {
+        log.warn("Actualizacion de personaje rechazada: {}", exception.getMessage());
+        return construir(HttpStatus.BAD_REQUEST, exception.getMessage());
     }
 
     @ExceptionHandler(UsuarioYaEnColaException.class)

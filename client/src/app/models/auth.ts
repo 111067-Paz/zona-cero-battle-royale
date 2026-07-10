@@ -4,6 +4,8 @@
  * WebSocket de juego (esa frontera la marca R1: el juego solo conoce el ticket de un solo uso).
  */
 
+import type { Personaje } from './personajes';
+
 export interface RegisterRequest {
   nombreUsuario: string;
   email: string;
@@ -23,6 +25,7 @@ export interface UsuarioDTO {
   id: number;
   nombreUsuario: string;
   email: string;
+  personaje: Personaje;
 }
 
 export interface AuthResponse {

@@ -6,8 +6,11 @@ import { Router } from '@angular/router';
 import { Subscription, switchMap, timer } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { ErrorApi } from '../../models/error-api';
+import { LISTA_PERSONAJES, Personaje } from '../../models/personajes';
+import { PersonajeRetratoComponent } from '../../shared/personaje-retrato.component';
 import { EstadisticaService } from './estadistica.service';
 import { MatchmakingService } from './matchmaking.service';
+import { PerfilService } from './perfil.service';
 
 /** Cada cuanto se pollea /api/matchmaking/estado mientras se busca partida (R21). */
 const INTERVALO_POLLING_MS = 1_500;
@@ -18,7 +21,7 @@ const INTERVALO_POLLING_MS = 1_500;
  */
 @Component({
   selector: 'app-lobby-page',
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, PersonajeRetratoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main class="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-4 py-8">
@@ -37,6 +40,27 @@ const INTERVALO_POLLING_MS = 1_500;
       <p class="text-lg">
         Hola, <span class="font-bold">{{ authService.usuarioActual()?.nombreUsuario }}</span>
       </p>
+
+      <section aria-labelledby="personaje-heading" class="rounded-xl border-2 p-4" style="border-color: var(--color-thick-border)">
+        <h2 id="personaje-heading" class="mb-3 text-xl font-bold uppercase">Tu personaje</h2>
+        <div class="flex flex-wrap gap-3">
+          @for (opcion of personajes; track opcion) {
+            <button
+              type="button"
+              (click)="elegirPersonaje(opcion)"
+              [disabled]="cambiandoPersonaje()"
+              [attr.aria-pressed]="opcion === personajeActual()"
+              class="rounded-xl border-2 p-1 disabled:opacity-60"
+              [style.border-color]="opcion === personajeActual() ? 'var(--color-accent, #facc15)' : 'var(--color-thick-border)'"
+            >
+              <app-personaje-retrato [personaje]="opcion" [tamano]="56" />
+            </button>
+          }
+        </div>
+        @if (errorPersonaje(); as mensaje) {
+          <p role="alert" class="mt-2 text-sm text-red-400">{{ mensaje }}</p>
+        }
+      </section>
 
       <button
         type="button"
@@ -122,6 +146,7 @@ export class LobbyPage {
   protected readonly authService = inject(AuthService);
   private readonly estadisticaService = inject(EstadisticaService);
   private readonly matchmakingService = inject(MatchmakingService);
+  private readonly perfilService = inject(PerfilService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -131,6 +156,11 @@ export class LobbyPage {
   protected readonly buscando = signal(false);
   protected readonly jugadoresEncontrados = signal<number | null>(null);
   protected readonly errorMatchmaking = signal<string | null>(null);
+
+  protected readonly personajes = LISTA_PERSONAJES;
+  protected readonly cambiandoPersonaje = signal(false);
+  protected readonly errorPersonaje = signal<string | null>(null);
+  protected readonly personajeActual = () => this.authService.usuarioActual()?.personaje ?? 'GATO';
 
   private suscripcionPolling: Subscription | null = null;
 
@@ -167,6 +197,25 @@ export class LobbyPage {
         }
         this.jugadoresEncontrados.set(estado.jugadoresEncontrados);
       });
+  }
+
+  elegirPersonaje(personaje: Personaje): void {
+    if (personaje === this.personajeActual()) {
+      return;
+    }
+    this.cambiandoPersonaje.set(true);
+    this.errorPersonaje.set(null);
+    this.perfilService.actualizarPersonaje(personaje).subscribe({
+      next: (usuario) => {
+        this.authService.actualizarUsuario(usuario);
+        this.cambiandoPersonaje.set(false);
+      },
+      error: (error: HttpErrorResponse) => {
+        this.cambiandoPersonaje.set(false);
+        const cuerpo = error.error as ErrorApi | null;
+        this.errorPersonaje.set(cuerpo?.message ?? 'No se pudo cambiar el personaje.');
+      },
+    });
   }
 
   salir(): void {

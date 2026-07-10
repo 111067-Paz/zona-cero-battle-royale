@@ -126,7 +126,7 @@ public class HandlerPartida extends TextWebSocketHandler {
                 new ConcurrentWebSocketSessionDecorator(session, LIMITE_ENVIO_MS, LIMITE_BUFFER_BYTES);
         SesionWebSocket sesion = new SesionWebSocket(idJugador, identidad.get().getIdPartida(), decorada);
         jugadores.put(session.getId(), sesion);
-        loop.get().encolar(new ComandoUnirse(sesion));
+        loop.get().encolar(new ComandoUnirse(sesion, identidad.get().getPersonaje()));
     }
 
     private void manejarInput(WebSocketSession session, Input input) {

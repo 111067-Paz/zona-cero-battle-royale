@@ -1,7 +1,28 @@
 import { Application, Graphics, Text } from 'pixi.js';
 import { DecoracionMapa, Mapa, RectanguloMapa } from '../../../models/mapa';
 import { BotinVisual, EstadoVisual, JugadorVisual, NumeroDanio, ProyectilVisual, ZonaVisual } from '../estado-visual';
+import { dibujarChibi } from './dibujo-chibi';
+import {
+  COLOR_CAMINO,
+  COLOR_FLOR_CENTRO,
+  COLOR_FLOR_PETALO,
+  COLOR_LAGO,
+  COLOR_LAGO_CLARO,
+  COLOR_RIO,
+  COLOR_RIO_CLARO,
+  especificacionObstaculo,
+  faseAgua,
+  lerpColor,
+  semillaDeterministica,
+} from './paleta-mapa';
 import { RendererJuego } from './renderer-juego';
+
+interface RectanguloMundo {
+  x: number;
+  y: number;
+  ancho: number;
+  alto: number;
+}
 
 interface PuntoPantalla {
   x: number;
@@ -28,7 +49,8 @@ export class RendererIsometrico implements RendererJuego {
   private static readonly ESCALA_X = 24; // pixeles por unidad de mundo en el eje isometrico horizontal
   private static readonly ESCALA_Y = 12; // 2:1 clasico: la mitad en vertical
   private static readonly RAIZ_2 = Math.SQRT2;
-  private static readonly ALTURA_OBSTACULO_PX = 26;
+  /** Cota superior de {@code alturaPx} entre todos los tipos de obstaculo (paleta-mapa): margen de culling seguro. */
+  private static readonly ALTURA_OBSTACULO_MAX_PX = 40;
   private static readonly ALTURA_CUERPO_PX = 10;
   private static readonly RADIO_PX = 14;
   private static readonly LARGO_MIRA_PX = 34;
@@ -38,16 +60,12 @@ export class RendererIsometrico implements RendererJuego {
   private static readonly DURACION_DANIO_MS = 600;
   private static readonly MARGEN_CULLING_PX = 120;
 
+  private static readonly ALTURA_ARBOL_TRONCO_PX = 14;
+
   private static readonly COLOR_VOID = 0x0f1a36;
   private static readonly COLOR_CESPED = 0x82c341;
-  private static readonly COLOR_OBSTACULO = 0xb5834a;
-  private static readonly COLOR_OBSTACULO_LADO_OSCURO = 0x8a5f33;
-  private static readonly COLOR_OBSTACULO_LADO_CLARO = 0x9e7040;
-  private static readonly COLOR_RIO = 0x3aa7d8;
   private static readonly COLOR_BORDE = 0x111424;
   private static readonly COLOR_PROPIO = 0x4ade80;
-  private static readonly COLOR_OTRO = 0xff6b9d;
-  private static readonly COLOR_MUERTO = 0x8a8f9c;
   private static readonly COLOR_SOMBRA = 0x111424;
   private static readonly COLOR_PROYECTIL = 0xffee44;
   private static readonly COLOR_ZONA_ACTUAL = 0x4ade80;
@@ -165,53 +183,112 @@ export class RendererIsometrico implements RendererJuego {
       RendererIsometrico.COLOR_CESPED,
       true,
     );
+    const ahoraMs = performance.now();
     for (const decoracion of this.mapa.decoraciones) {
-      this.dibujarRomboPlano(decoracion, this.colorDecoracion(decoracion), false);
+      this.dibujarDecoracion(decoracion, ahoraMs);
     }
   }
 
-  /** Rectangulo de mundo proyectado como rombo a nivel del suelo (sin volumen: decoracion, piso). */
-  private dibujarRomboPlano(rectangulo: RectanguloMapa, color: number, conBorde: boolean): void {
+  private dibujarDecoracion(decoracion: DecoracionMapa, ahoraMs: number): void {
+    switch (decoracion.tipo) {
+      case 'RIO':
+        this.dibujarRomboPlano(decoracion, this.colorAgua(COLOR_RIO, COLOR_RIO_CLARO, ahoraMs), false);
+        return;
+      case 'LAGO':
+        this.dibujarRomboPlano(decoracion, this.colorAgua(COLOR_LAGO, COLOR_LAGO_CLARO, ahoraMs), false);
+        return;
+      case 'CAMINO':
+        this.dibujarRomboPlano(decoracion, COLOR_CAMINO, false);
+        return;
+      case 'FLOR': {
+        const visible = this.dibujarRomboPlano(decoracion, RendererIsometrico.COLOR_CESPED, false);
+        if (visible) {
+          this.dibujarFlores(decoracion);
+        }
+        return;
+      }
+      default:
+        this.dibujarRomboPlano(decoracion, RendererIsometrico.COLOR_CESPED, false);
+    }
+  }
+
+  /** Color del agua "respirando" entre dos tonos con el reloj — animado sin estado propio. */
+  private colorAgua(base: number, claro: number, ahoraMs: number): number {
+    const t = (Math.sin(faseAgua(ahoraMs) * Math.PI * 2) + 1) / 2;
+    return lerpColor(base, claro, t);
+  }
+
+  /** Flores deterministicas (sin Math.random): mismas coordenadas -> mismas flores, siempre. */
+  private dibujarFlores(decoracion: DecoracionMapa): void {
+    const cantidad = 3;
+    for (let i = 0; i < cantidad; i++) {
+      const tx = semillaDeterministica(decoracion.x + i * 7.3, decoracion.y + i * 3.1);
+      const ty = semillaDeterministica(decoracion.y + i * 11.7, decoracion.x + i * 5.9);
+      const punto = this.proyectar(decoracion.x + tx * decoracion.ancho, decoracion.y + ty * decoracion.alto);
+      this.graficos.circle(punto.x, punto.y, 2.5).fill(COLOR_FLOR_PETALO);
+      this.graficos.circle(punto.x, punto.y, 1).fill(COLOR_FLOR_CENTRO);
+    }
+  }
+
+  /** Rectangulo de mundo proyectado como rombo a nivel del suelo (sin volumen: decoracion, piso). Devuelve si se dibujo (no cullido). */
+  private dibujarRomboPlano(rectangulo: RectanguloMundo, color: number, conBorde: boolean): boolean {
     const [a, b, c, d] = this.esquinasProyectadas(rectangulo);
     if (!this.bboxEnPantalla([a, b, c, d])) {
-      return;
+      return false;
     }
     const dibujo = this.graficos.poly([a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y]).fill(color);
     if (conBorde) {
       dibujo.stroke({ width: RendererIsometrico.GROSOR_BORDE, color: RendererIsometrico.COLOR_BORDE });
     }
+    return true;
   }
 
   /**
    * Obstaculo como prisma extruido: rombo superior elevado + las DOS caras visibles desde esta
    * proyeccion (la sur y la este, adyacentes a la esquina frontal), cada una con su propio tono
-   * para el relieve del estilo Battle Bash.
+   * para el relieve del estilo Battle Bash. Altura y colores salen de la paleta por tipo (B6); el
+   * ARBOL es el unico caso especial: tronco angosto + copa eliptica en vez de rombo superior.
    */
   private dibujarPrisma(obstaculo: RectanguloMapa): void {
     const [a, b, c, d] = this.esquinasProyectadas(obstaculo);
     if (!this.bboxEnPantalla([a, b, c, d])) {
       return;
     }
-    const h = RendererIsometrico.ALTURA_OBSTACULO_PX;
+    if (obstaculo.tipo === 'ARBOL') {
+      this.dibujarArbol(obstaculo, a, b, c, d);
+      return;
+    }
+    const especificacion = especificacionObstaculo(obstaculo.tipo);
+    const h = especificacion.alturaPx;
     const at = { x: a.x, y: a.y - h };
     const bt = { x: b.x, y: b.y - h };
     const ct = { x: c.x, y: c.y - h };
     const dt = { x: d.x, y: d.y - h };
     const borde = { width: RendererIsometrico.GROSOR_BORDE, color: RendererIsometrico.COLOR_BORDE };
+    const colorLadoOscuro = lerpColor(especificacion.colorPrincipal, 0x000000, 0.3);
+    const colorLadoClaro = lerpColor(especificacion.colorPrincipal, 0xffffff, 0.15);
 
     // Cara sur (D-C, la de mayor y de mundo) y cara este (B-C, la de mayor x de mundo).
+    this.graficos.poly([d.x, d.y, c.x, c.y, ct.x, ct.y, dt.x, dt.y]).fill(colorLadoOscuro).stroke(borde);
+    this.graficos.poly([b.x, b.y, c.x, c.y, ct.x, ct.y, bt.x, bt.y]).fill(colorLadoClaro).stroke(borde);
+    this.graficos.poly([at.x, at.y, bt.x, bt.y, ct.x, ct.y, dt.x, dt.y]).fill(especificacion.colorPrincipal).stroke(borde);
+  }
+
+  /** Arbol: tronco angosto (colorSecundario) hasta media altura + copa eliptica (colorPrincipal) encima. */
+  private dibujarArbol(obstaculo: RectanguloMapa, a: PuntoPantalla, b: PuntoPantalla, c: PuntoPantalla, d: PuntoPantalla): void {
+    const especificacion = especificacionObstaculo('ARBOL');
+    const centro = this.proyectar(obstaculo.x + obstaculo.ancho / 2, obstaculo.y + obstaculo.alto / 2);
+    const anchoTronco = (b.x - a.x) * 0.2;
+    const troncoY = centro.y - RendererIsometrico.ALTURA_ARBOL_TRONCO_PX;
     this.graficos
-      .poly([d.x, d.y, c.x, c.y, ct.x, ct.y, dt.x, dt.y])
-      .fill(RendererIsometrico.COLOR_OBSTACULO_LADO_OSCURO)
-      .stroke(borde);
+      .rect(centro.x - anchoTronco / 2, troncoY, anchoTronco, RendererIsometrico.ALTURA_ARBOL_TRONCO_PX)
+      .fill(especificacion.colorSecundario)
+      .stroke({ width: 2, color: RendererIsometrico.COLOR_BORDE });
+    const semiejeX = Math.hypot(c.x - a.x, c.y - a.y) / 2;
     this.graficos
-      .poly([b.x, b.y, c.x, c.y, ct.x, ct.y, bt.x, bt.y])
-      .fill(RendererIsometrico.COLOR_OBSTACULO_LADO_CLARO)
-      .stroke(borde);
-    this.graficos
-      .poly([at.x, at.y, bt.x, bt.y, ct.x, ct.y, dt.x, dt.y])
-      .fill(RendererIsometrico.COLOR_OBSTACULO)
-      .stroke(borde);
+      .ellipse(centro.x, troncoY - especificacion.alturaPx * 0.35, semiejeX * 0.6, semiejeX * 0.4)
+      .fill(especificacion.colorPrincipal)
+      .stroke({ width: RendererIsometrico.GROSOR_BORDE, color: RendererIsometrico.COLOR_BORDE });
   }
 
   private dibujarJugador(jugador: JugadorVisual, propio: boolean): void {
@@ -233,15 +310,7 @@ export class RendererIsometrico implements RendererJuego {
         .lineTo(base.x + mira.x, cuerpoY + mira.y)
         .stroke({ width: RendererIsometrico.GROSOR_BORDE, color: RendererIsometrico.COLOR_BORDE });
     }
-    const color = muerto
-      ? RendererIsometrico.COLOR_MUERTO
-      : propio
-        ? RendererIsometrico.COLOR_PROPIO
-        : RendererIsometrico.COLOR_OTRO;
-    this.graficos
-      .circle(base.x, cuerpoY, RendererIsometrico.RADIO_PX)
-      .fill(color)
-      .stroke({ width: RendererIsometrico.GROSOR_BORDE, color: RendererIsometrico.COLOR_BORDE });
+    dibujarChibi(this.graficos, base.x, cuerpoY, RendererIsometrico.RADIO_PX, jugador.personaje, { muerto, propio });
     if (!muerto) {
       this.dibujarBarraHp(base.x, cuerpoY, jugador.hp);
     }
@@ -363,7 +432,7 @@ export class RendererIsometrico implements RendererJuego {
   }
 
   /** Esquinas del rectangulo de mundo en orden A(x,y), B(x+w,y), C(x+w,y+h), D(x,y+h), proyectadas. */
-  private esquinasProyectadas(rectangulo: RectanguloMapa): [PuntoPantalla, PuntoPantalla, PuntoPantalla, PuntoPantalla] {
+  private esquinasProyectadas(rectangulo: RectanguloMundo): [PuntoPantalla, PuntoPantalla, PuntoPantalla, PuntoPantalla] {
     return [
       this.proyectar(rectangulo.x, rectangulo.y),
       this.proyectar(rectangulo.x + rectangulo.ancho, rectangulo.y),
@@ -380,10 +449,6 @@ export class RendererIsometrico implements RendererJuego {
       return 0xffcc00;
     }
     return 0xff4444;
-  }
-
-  private colorDecoracion(decoracion: DecoracionMapa): number {
-    return decoracion.tipo === 'RIO' ? RendererIsometrico.COLOR_RIO : RendererIsometrico.COLOR_CESPED;
   }
 
   private enPantalla(punto: PuntoPantalla): boolean {
@@ -416,7 +481,7 @@ export class RendererIsometrico implements RendererJuego {
     }
     const margen = RendererIsometrico.MARGEN_CULLING_PX;
     return maxX >= -margen && minX <= this.app.renderer.width + margen
-      && maxY >= -margen && minY - RendererIsometrico.ALTURA_OBSTACULO_PX <= this.app.renderer.height + margen;
+      && maxY >= -margen && minY - RendererIsometrico.ALTURA_OBSTACULO_MAX_PX <= this.app.renderer.height + margen;
   }
 
   private posicionCamara(estado: EstadoVisual, idJugadorPropio: string | null): { x: number; y: number } {

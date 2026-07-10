@@ -1,4 +1,5 @@
 import { EstadoPartida, EstadoVida } from '../../models/protocolo';
+import { Personaje } from '../../models/personajes';
 
 /**
  * Estado listo para dibujar: posiciones YA interpoladas en coordenadas de mundo. Es lo que consume
@@ -12,6 +13,7 @@ export interface JugadorVisual {
   hp: number;
   estadoVida: EstadoVida;
   conectado: boolean;
+  personaje: Personaje;
 }
 
 export interface ProyectilVisual {

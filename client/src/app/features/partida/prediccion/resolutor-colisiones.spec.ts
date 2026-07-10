@@ -8,7 +8,7 @@ const ANCHO = 100;
 const ALTO = 100;
 
 /** Mapa 100x100 con UN obstaculo que ocupa [40,60] x [40,60] — espejo del test Java. */
-const OBSTACULO_CENTRAL: RectanguloMapa = { x: 40, y: 40, ancho: 20, alto: 20 };
+const OBSTACULO_CENTRAL: RectanguloMapa = { x: 40, y: 40, ancho: 20, alto: 20, tipo: 'CAJA' };
 
 function resolver(x: number, y: number): { x: number; y: number } {
   return resolverColision({ x, y }, RADIO, ANCHO, ALTO, [OBSTACULO_CENTRAL]);

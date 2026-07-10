@@ -44,7 +44,11 @@ public class CargadorMapas {
     /** Spawns minimos: uno por jugador de una partida llena. */
     private static final int SPAWNS_MINIMOS = 10;
 
-    private static final String ID_MAPA_LOCAL = "campo-01";
+    /** Catalogo de mapas jugables: {@link GestorPartidas} elige uno al azar por partida nueva. */
+    public static final List<String> IDS_MAPAS = List.of("campo-01", "campo-02");
+
+    private static final List<String> TIPOS_OBSTACULO_VALIDOS = List.of("CAJA", "ARBOL", "ROCA", "CARPA");
+    private static final String TIPO_OBSTACULO_POR_DEFECTO = "CAJA";
 
     private final ObjectMapper objectMapper;
     private final ConfiguracionJuego config;
@@ -54,8 +58,13 @@ public class CargadorMapas {
 
     @PostConstruct
     void cargarMapasIniciales() {
-        cargar(ID_MAPA_LOCAL);
+        IDS_MAPAS.forEach(this::cargar);
         log.info("Mapas cargados: {}", mapasJuego.keySet());
+    }
+
+    /** Ids de los mapas cargados y disponibles para sortear al crear una partida nueva. */
+    public List<String> idsDisponibles() {
+        return IDS_MAPAS;
     }
 
     /** Vista de dominio para la simulacion. Falla si el mapa no existe (deberia estar cargado). */
@@ -74,10 +83,23 @@ public class CargadorMapas {
 
     void cargar(String id) {
         DefinicionMapa definicion = leer(id);
+        normalizarObstaculos(definicion);
         validar(id, definicion);
         List<ObstaculoAABB> obstaculos = aObstaculos(definicion);
         mapasJuego.put(id, aMapaJuego(id, definicion, obstaculos));
         mapasDto.put(id, aMapaDto(id, definicion));
+    }
+
+    /** Obstaculo sin `tipo` en el JSON (mapas de test, definiciones viejas) -> CAJA por defecto. */
+    private void normalizarObstaculos(DefinicionMapa definicion) {
+        if (definicion.getObstaculos() == null) {
+            return;
+        }
+        for (RectanguloMapa obstaculo : definicion.getObstaculos()) {
+            if (obstaculo.getTipo() == null) {
+                obstaculo.setTipo(TIPO_OBSTACULO_POR_DEFECTO);
+            }
+        }
     }
 
     private DefinicionMapa leer(String id) {
@@ -97,9 +119,11 @@ public class CargadorMapas {
         if (spawns == null || spawns.size() < SPAWNS_MINIMOS) {
             throw invalido(id, "se requieren al menos " + SPAWNS_MINIMOS + " spawns");
         }
+        List<RectanguloMapa> rectangulos = definicion.getObstaculos() == null ? List.of() : definicion.getObstaculos();
         List<ObstaculoAABB> obstaculos = aObstaculos(definicion);
-        for (ObstaculoAABB obstaculo : obstaculos) {
-            validarObstaculo(id, definicion, obstaculo);
+        for (int i = 0; i < obstaculos.size(); i++) {
+            validarObstaculo(id, definicion, obstaculos.get(i));
+            validarTipoObstaculo(id, rectangulos.get(i));
         }
         double radio = config.getRadioJugador();
         for (PuntoMapa spawn : spawns) {
@@ -118,6 +142,12 @@ public class CargadorMapas {
                 || obstaculo.bordeDerecho() > definicion.getAncho()
                 || obstaculo.bordeInferior() > definicion.getAlto()) {
             throw invalido(id, "obstaculo fuera de los limites del mapa");
+        }
+    }
+
+    private void validarTipoObstaculo(String id, RectanguloMapa rectangulo) {
+        if (!TIPOS_OBSTACULO_VALIDOS.contains(rectangulo.getTipo())) {
+            throw invalido(id, "tipo de obstaculo invalido: " + rectangulo.getTipo());
         }
     }
 

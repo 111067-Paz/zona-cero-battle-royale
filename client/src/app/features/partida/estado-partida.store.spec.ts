@@ -13,6 +13,7 @@ function jugador(
 ): JugadorSnapshot {
   return {
     id, x, y, angulo, hp, estadoVida, conectado: true, arma: 'PISTOLA', kills: 0, botiquines: 0,
+    personaje: 'GATO',
   };
 }
 

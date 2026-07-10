@@ -1,6 +1,8 @@
 package ar.pazluciano.battleroyale.plataforma.controllers;
 
+import ar.pazluciano.battleroyale.comun.personajes.Personaje;
 import ar.pazluciano.battleroyale.comun.tickets.TicketService;
+import ar.pazluciano.battleroyale.plataforma.services.PerfilService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,12 +34,14 @@ class TicketControllerTest {
 
     @Mock
     private TicketService ticketService;
+    @Mock
+    private PerfilService perfilService;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        TicketController controller = new TicketController(ticketService);
+        TicketController controller = new TicketController(ticketService, perfilService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .build();
@@ -54,7 +58,8 @@ class TicketControllerTest {
     @DisplayName("POST /api/partidas/ticket con usuario autenticado devuelve 200 con el ticket")
     void crearTicket_usuarioAutenticado_devuelve200ConTicket() throws Exception {
         // GIVEN
-        when(ticketService.crear(ID_USUARIO, ID_PARTIDA)).thenReturn("ticket-generado");
+        when(perfilService.personajeDe(ID_USUARIO)).thenReturn(Personaje.GATO);
+        when(ticketService.crear(ID_USUARIO, ID_PARTIDA, Personaje.GATO)).thenReturn("ticket-generado");
 
         // WHEN + THEN
         mockMvc.perform(post("/api/partidas/ticket").param("idPartida", ID_PARTIDA))

@@ -1,6 +1,8 @@
 package ar.pazluciano.battleroyale.juego.motor;
 
+import ar.pazluciano.battleroyale.juego.dominio.mapa.MapaJuego;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Finalizada;
+import ar.pazluciano.battleroyale.juego.motor.mapa.CargadorMapas;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -46,6 +48,20 @@ class GestorPartidasIntegrationTest {
 
         primera.detener();
         segunda.detener();
+    }
+
+    @Test
+    @DisplayName("crearPartida sortea el mapa entre los del catalogo (Decision de arquitectura #5)")
+    void crearPartida_eligeUnMapaDelCatalogo() {
+        // WHEN
+        GameLoop loop = gestorPartidas.crearPartida(List.of());
+
+        // THEN
+        Object partida = ReflectionTestUtils.getField(loop, "partida");
+        MapaJuego mapa = (MapaJuego) ReflectionTestUtils.getField(partida, "mapa");
+        assertTrue(CargadorMapas.IDS_MAPAS.contains(mapa.getId()));
+
+        loop.detener();
     }
 
     @Test

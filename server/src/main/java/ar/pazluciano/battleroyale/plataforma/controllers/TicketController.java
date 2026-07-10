@@ -2,6 +2,7 @@ package ar.pazluciano.battleroyale.plataforma.controllers;
 
 import ar.pazluciano.battleroyale.comun.tickets.TicketService;
 import ar.pazluciano.battleroyale.plataforma.dtos.TicketResponse;
+import ar.pazluciano.battleroyale.plataforma.services.PerfilService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,11 +23,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class TicketController {
 
     private final TicketService ticketService;
+    private final PerfilService perfilService;
 
     @PostMapping("/ticket")
     public ResponseEntity<TicketResponse> crearTicket(@AuthenticationPrincipal Long idUsuario,
             @RequestParam String idPartida) {
-        String ticket = ticketService.crear(idUsuario, idPartida);
+        String ticket = ticketService.crear(idUsuario, idPartida, perfilService.personajeDe(idUsuario));
         return ResponseEntity.ok(TicketResponse.builder().ticket(ticket).build());
     }
 }

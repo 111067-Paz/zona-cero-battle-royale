@@ -433,6 +433,7 @@ export class EstadoPartidaStore {
       hp: destino.hp,
       estadoVida: destino.estadoVida,
       conectado: destino.conectado,
+      personaje: destino.personaje,
     };
   }
 
@@ -479,6 +480,7 @@ export class EstadoPartidaStore {
       hp: jugador.hp,
       estadoVida: jugador.estadoVida,
       conectado: jugador.conectado,
+      personaje: jugador.personaje,
     };
   }
 
