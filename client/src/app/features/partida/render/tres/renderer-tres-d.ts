@@ -107,6 +107,8 @@ export class RendererTresD implements RendererJuego {
 
   private pitch = 0.6; // Ángulo vertical inicial (~34 grados)
   private alMoverMouse: ((e: MouseEvent) => void) | null = null;
+  private alTeclaV: ((e: KeyboardEvent) => void) | null = null;
+  private tipoCamara: 'tercera' | 'primera' = 'tercera';
   private ultimoFrameMs = performance.now();
 
   async iniciar(canvas: HTMLCanvasElement): Promise<void> {
@@ -188,6 +190,14 @@ export class RendererTresD implements RendererJuego {
       }
     };
     window.addEventListener('mousemove', this.alMoverMouse);
+
+    // Alternar cámara con la tecla V (Tercera persona vs Primera persona)
+    this.alTeclaV = (e: KeyboardEvent) => {
+      if (e.key === 'v' || e.key === 'V') {
+        this.tipoCamara = this.tipoCamara === 'tercera' ? 'primera' : 'tercera';
+      }
+    };
+    window.addEventListener('keydown', this.alTeclaV);
 
     this.resizeObserver = new ResizeObserver(() => this.ajustarAlContenedor());
     if (canvas.parentElement !== null) {
@@ -289,15 +299,37 @@ export class RendererTresD implements RendererJuego {
       this.aplicarEstadoVida(entidad, muerto);
     }
     if (!muerto) {
-      entidad.rig.raiz.rotation.y = -jugador.angulo - Math.PI / 2;
+      entidad.rig.raiz.rotation.y = -jugador.angulo + Math.PI / 2;
     }
 
-    // Dibujar el arma equipada actualmente en la mano del personaje
+    const enPrimeraPersona = propio && this.tipoCamara === 'primera';
+
+    // Dibujar el arma equipada actualmente en la mano del personaje (o en la cámara en 1ra persona)
     if (entidad.rig.armas) {
       const armaActual = jugador.arma;
       for (const [tipo, mesh] of Object.entries(entidad.rig.armas)) {
-        mesh.visible = !muerto && (tipo === armaActual);
+        if (tipo === armaActual) {
+          if (enPrimeraPersona && this.camera) {
+            this.camera.add(mesh);
+            mesh.visible = !muerto;
+            mesh.position.set(0.18, -0.22, -0.45);
+            mesh.rotation.set(0, Math.PI, 0);
+          } else {
+            entidad.rig.playerPrefab.equiparArma(mesh);
+            mesh.visible = !muerto;
+            mesh.position.set(0, 0, 0);
+            mesh.rotation.set(0, 0, 0);
+          }
+        } else {
+          mesh.visible = false;
+        }
       }
+    }
+
+    if (enPrimeraPersona) {
+      entidad.rig.raiz.visible = false;
+    } else {
+      entidad.rig.raiz.visible = true;
     }
 
     const moviendo = !muerto && distanciaMovida > UMBRAL_MOVIMIENTO_BOBBING;
@@ -465,7 +497,6 @@ export class RendererTresD implements RendererJuego {
     }
   }
 
-  /** Cámara detrás y arriba del jugador propio, mirando hacia donde apunta (Decision #6); congelada si está muerto/ausente. */
   private actualizarCamara(jugadores: readonly JugadorVisual[], idPropio: string | null): void {
     if (this.camera === null) {
       return;
@@ -480,18 +511,29 @@ export class RendererTresD implements RendererJuego {
     }
     const centro = aVector3(propio.x, propio.y, 0);
     const yaw = propio.angulo;
-    const d = DISTANCIA_CAMARA;
 
-    // Posición orbital esférica 3D completa usando yaw (giro horizontal) y pitch (giro vertical del mouse)
-    const dx = -d * Math.cos(this.pitch) * Math.cos(yaw);
-    const dy = d * Math.sin(this.pitch);
-    const dz = -d * Math.cos(this.pitch) * Math.sin(yaw);
+    if (this.tipoCamara === 'primera') {
+      const dirX = Math.cos(yaw);
+      const dirZ = Math.sin(yaw);
+      const posicion = centro.clone().add(new Vector3(dirX * 0.15, ALTURA_MIRA, dirZ * 0.15));
+      const lookAtOffsetY = Math.sin(0.6 - this.pitch) * 5;
+      const mira = centro.clone().add(new Vector3(dirX * 10, ALTURA_MIRA + lookAtOffsetY, dirZ * 10));
+      this.camera.position.copy(posicion);
+      this.camera.lookAt(mira);
+      this.ultimaPoseCamara = { posicion, mira };
+    } else {
+      const d = DISTANCIA_CAMARA;
+      // Posición orbital esférica 3D completa usando yaw (giro horizontal) y pitch (giro vertical del mouse)
+      const dx = -d * Math.cos(this.pitch) * Math.cos(yaw);
+      const dy = d * Math.sin(this.pitch);
+      const dz = -d * Math.cos(this.pitch) * Math.sin(yaw);
 
-    const posicion = centro.clone().add(new Vector3(dx, dy, dz));
-    const mira = centro.clone().add(new Vector3(0, ALTURA_MIRA, 0));
-    this.camera.position.copy(posicion);
-    this.camera.lookAt(mira);
-    this.ultimaPoseCamara = { posicion, mira };
+      const posicion = centro.clone().add(new Vector3(dx, dy, dz));
+      const mira = centro.clone().add(new Vector3(0, ALTURA_MIRA, 0));
+      this.camera.position.copy(posicion);
+      this.camera.lookAt(mira);
+      this.ultimaPoseCamara = { posicion, mira };
+    }
   }
 
   redimensionar(): void {
@@ -502,6 +544,10 @@ export class RendererTresD implements RendererJuego {
     if (this.alMoverMouse !== null) {
       window.removeEventListener('mousemove', this.alMoverMouse);
       this.alMoverMouse = null;
+    }
+    if (this.alTeclaV !== null) {
+      window.removeEventListener('keydown', this.alTeclaV);
+      this.alTeclaV = null;
     }
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
@@ -521,6 +567,11 @@ export class RendererTresD implements RendererJuego {
           this.liberarMaterial(objeto.material);
         }
       });
+    }
+    if (this.camera !== null) {
+      while (this.camera.children.length > 0) {
+        this.camera.remove(this.camera.children[0]);
+      }
     }
     this.renderer?.dispose();
     this.renderer?.forceContextLoss();
