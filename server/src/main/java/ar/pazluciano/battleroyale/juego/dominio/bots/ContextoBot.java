@@ -58,4 +58,15 @@ public class ContextoBot {
     public Vector2 direccionHaciaZona() {
         return mundo.centroZona().sumar(jugador.getPosicion().escalar(-1.0)).normalizado();
     }
+
+    /** HISTERESIS DE SEGURIDAD: Comprueba si el bot se ha adentrado un margen seguro dentro de la zona. */
+    public boolean estaSeguroEnZona(double margenSeguridad) {
+        if (!mundo.hayZonaActiva()) {
+            return true;
+        }
+        double dx = jugador.getPosicion().getX() - mundo.centroZona().getX();
+        double dy = jugador.getPosicion().getY() - mundo.centroZona().getY();
+        double distancia = Math.hypot(dx, dy);
+        return distancia <= Math.max(0, mundo.radioZona() - margenSeguridad);
+    }
 }

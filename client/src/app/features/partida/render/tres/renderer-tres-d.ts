@@ -23,6 +23,7 @@ import {
 } from 'three';
 import { Mapa } from '../../../../models/mapa';
 import { BotinVisual, EstadoVisual, JugadorVisual, NumeroDanio, ProyectilVisual } from '../../estado-visual';
+import { BotinPrefab } from './prefabs/botin-prefab';
 import { faseAgua, lerpColor } from '../paleta-mapa';
 import { RendererJuego } from '../renderer-juego';
 import { ALTURA_CUERPO_CHIBI, ChibiRig, construirChibi, faseDesdeId, RADIO_CABEZA_CHIBI, RADIO_CUERPO_CHIBI } from './modelos-chibi-3d';
@@ -100,7 +101,7 @@ export class RendererTresD implements RendererJuego {
   private zona: Zona3D | null = null;
 
   private readonly jugadores = new Map<string, EntidadJugador>();
-  private readonly botines = new Map<number, Mesh>();
+  private readonly botines = new Map<number, BotinPrefab>();
   private readonly proyectiles: Mesh[] = [];
   private readonly textosDanio: TextoDanio[] = [];
   private ultimaPoseCamara: { posicion: Vector3; mira: Vector3 } | null = null;
@@ -414,22 +415,20 @@ export class RendererTresD implements RendererJuego {
     const vistos = new Set<number>();
     for (const botin of botines) {
       vistos.add(botin.id);
-      let mesh = this.botines.get(botin.id);
-      if (mesh === undefined) {
-        const color = botin.tipo === 'BOTIQUIN' ? COLOR_BOTIQUIN : COLOR_ARMA_BOTIN;
-        mesh = new Mesh(new SphereGeometry(0.18, 8, 6), new MeshBasicMaterial({ color }));
-        this.scene.add(mesh);
-        this.botines.set(botin.id, mesh);
+      let prefab = this.botines.get(botin.id);
+      if (prefab === undefined) {
+        prefab = new BotinPrefab(botin.tipo);
+        this.scene.add(prefab.contenedor);
+        this.botines.set(botin.id, prefab);
       }
-      const flote = Math.sin((ahoraMs / 1000) * 2 + botin.id) * 0.06;
-      mesh.position.copy(aVector3(botin.x, botin.y, 0.25 + flote));
-      mesh.rotation.y = (ahoraMs / 1000) * 1.2 + botin.id;
+      const flote = Math.sin((ahoraMs / 1000) * 2.5 + botin.id) * 0.08;
+      prefab.contenedor.position.copy(aVector3(botin.x, botin.y, 0.25 + flote));
+      prefab.contenedor.rotation.y = (ahoraMs / 1000) * 1.5 + botin.id;
     }
-    for (const [id, mesh] of this.botines) {
+    for (const [id, prefab] of this.botines) {
       if (!vistos.has(id)) {
-        mesh.removeFromParent();
-        mesh.geometry.dispose();
-        this.liberarMaterial(mesh.material);
+        prefab.contenedor.removeFromParent();
+        prefab.destruir();
         this.botines.delete(id);
       }
     }
@@ -584,6 +583,10 @@ export class RendererTresD implements RendererJuego {
     this.mundo = null;
     this.zona = null;
     this.jugadores.clear();
+    this.botines.forEach((prefab) => {
+      prefab.contenedor.removeFromParent();
+      prefab.destruir();
+    });
     this.botines.clear();
     this.proyectiles.length = 0;
     this.textosDanio.length = 0;

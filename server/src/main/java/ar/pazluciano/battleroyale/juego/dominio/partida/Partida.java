@@ -456,6 +456,11 @@ public class Partida implements VistaMundo {
         return zona.getCentro();
     }
 
+    @Override
+    public double radioZona() {
+        return zona != null ? zona.getRadio() : Double.MAX_VALUE;
+    }
+
     /**
      * Queda 1 vivo -> gana. Queda 0 vivos -> empate por: 1) mayor HP al inicio del tick, 2) mas kills,
      * 3) orden de union mas bajo (§8.3). Con 1 solo participante no hay "batalla" que resolver.

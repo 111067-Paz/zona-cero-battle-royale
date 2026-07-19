@@ -26,4 +26,7 @@ public interface VistaMundo {
 
     /** Centro de la zona segura actual. Solo valido si {@link #hayZonaActiva()}. */
     Vector2 centroZona();
+
+    /** Radio de la zona segura actual. Solo valido si {@link #hayZonaActiva()}. */
+    double radioZona();
 }

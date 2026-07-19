@@ -56,4 +56,9 @@ class MundoFalso implements VistaMundo {
     public Vector2 centroZona() {
         return centroZona;
     }
+
+    @Override
+    public double radioZona() {
+        return radioZona;
+    }
 }
