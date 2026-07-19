@@ -51,32 +51,8 @@ const CLAVE_RENDERER = 'zc.renderer';
   template: `
     <div class="contenedor">
       <canvas #lienzo class="lienzo"></canvas>
-      @if (modoRenderer() === '3d') {
-        <div class="mira" aria-hidden="true"></div>
-        @if (!entrada.capturaActiva()) {
-          <button type="button" class="aviso-captura" (click)="entrada.solicitarCaptura()">
-            CLICK PARA CAPTURAR EL MOUSE
-          </button>
-        }
-      }
       <app-hud />
       <app-overlay-estado />
-      <div class="pie">
-        <span class="estado" [class.estado--ok]="estadoConexion() === 'conectado'">
-          {{ estadoConexion() }}
-        </span>
-        <span class="pista">
-          {{ modoRenderer() === '3d' ? 'mouse girar · W avanzar · click disparar' : 'WASD moverte · mouse apuntar · click disparar' }}
-        </span>
-        <button
-          type="button"
-          class="alternar-vista"
-          (click)="alternarRenderer()"
-          [disabled]="cambiandoRenderer()"
-        >
-          VISTA: {{ etiquetaModo() }}
-        </button>
-      </div>
     </div>
   `,
   styles: [
