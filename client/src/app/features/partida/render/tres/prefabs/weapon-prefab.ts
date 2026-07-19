@@ -26,8 +26,18 @@ export class WeaponPrefab extends BasePrefab {
       const cfg = configMgr.weapons[targetKey];
       if (cfg) {
         if (cfg.scale) this.modeloLoaded.scale.setScalar(cfg.scale);
-        if (cfg.positionOffset) this.modeloLoaded.position.set(...cfg.positionOffset);
-        if (cfg.rotationOffset) this.modeloLoaded.rotation.set(...cfg.rotationOffset);
+
+        const pos = cfg.positionOffset ?? cfg.offset;
+        if (pos) this.modeloLoaded.position.set(pos[0], pos[1], pos[2]);
+
+        const rot = cfg.rotationOffset ?? cfg.rotation;
+        if (rot) {
+          this.modeloLoaded.rotation.set(rot[0], rot[1], rot[2]);
+        } else {
+          this.modeloLoaded.rotation.y = -Math.PI / 2;
+        }
+      } else {
+        this.modeloLoaded.rotation.y = -Math.PI / 2;
       }
 
       this.configurarSombras(this.modeloLoaded);

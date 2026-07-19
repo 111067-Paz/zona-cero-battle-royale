@@ -1,7 +1,9 @@
-import { AnimationClip, Group, Mesh, Object3D } from 'three';
+import { AnimationClip, Group, Mesh, Object3D, TextureLoader } from 'three';
 import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+
+import { TextureManager } from './texture-manager';
 
 export interface ModeloClonado {
   escena: Group;
@@ -50,11 +52,26 @@ export class ModelManager {
         });
       }
 
-      // Configurar sombras en mallas del modelo
+      // Configurar sombras y texturas en mallas del modelo
       gltf.scene.traverse((child: Object3D) => {
         if (child instanceof Mesh) {
           child.castShadow = true;
           child.receiveShadow = true;
+
+          // Si es un modelo de pino FBX sin mapa, asignar la textura de agujas y corteza de pino
+          if (url.toLowerCase().includes('pinetree') && child.material) {
+            const mat = child.material as any;
+            if (!mat.map) {
+              const nameLower = child.name.toLowerCase();
+              const isLeaf = nameLower.includes('leaf') || nameLower.includes('leaves') || nameLower.includes('branch') || nameLower.includes('needle');
+              const texUrl = isLeaf ? 'assets/vegetation/PineTree_Leaves.png' : 'assets/vegetation/PineTree_Bark.jpg';
+              const loader = new TextureLoader();
+              loader.load(texUrl, (tex) => {
+                mat.map = tex;
+                mat.needsUpdate = true;
+              });
+            }
+          }
         }
       });
 

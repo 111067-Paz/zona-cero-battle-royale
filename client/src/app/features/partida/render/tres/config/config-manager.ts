@@ -10,8 +10,10 @@ export interface WeaponConfig {
   model: string;
   socket: string;
   scale: number;
-  positionOffset: [number, number, number];
-  rotationOffset: [number, number, number];
+  positionOffset?: [number, number, number];
+  rotationOffset?: [number, number, number];
+  offset?: [number, number, number];
+  rotation?: [number, number, number];
 }
 
 export interface EnvironmentConfig {
