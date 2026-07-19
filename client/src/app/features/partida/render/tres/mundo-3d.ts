@@ -97,6 +97,18 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
           treeP.contenedor.position.copy(aVector3(cx, cy));
           grupo.add(treeP.contenedor);
           arboles.push({ copa: treeP.contenedor, fase: Math.random() * Math.PI * 2 });
+
+          // Sembrar un racimo denso de árboles secundarios y vegetación alrededor
+          for (let k = 0; k < 3; k++) {
+            const offsetX = (Math.random() - 0.5) * 6;
+            const offsetY = (Math.random() - 0.5) * 6;
+            const subTree = new TreePrefab();
+            if (subTree.tieneModeloValido()) {
+              subTree.contenedor.position.copy(aVector3(cx + offsetX, cy + offsetY));
+              grupo.add(subTree.contenedor);
+              arboles.push({ copa: subTree.contenedor, fase: Math.random() * Math.PI * 2 });
+            }
+          }
         }
         break;
       }
@@ -105,6 +117,13 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
         if (rockP.tieneModeloValido()) {
           rockP.contenedor.position.copy(aVector3(cx, cy));
           grupo.add(rockP.contenedor);
+
+          // Rocas secundarias decorativas alrededor
+          const subRock = new RockPrefab();
+          if (subRock.tieneModeloValido()) {
+            subRock.contenedor.position.copy(aVector3(cx + (Math.random() - 0.5) * 3, cy + (Math.random() - 0.5) * 3));
+            grupo.add(subRock.contenedor);
+          }
         }
         break;
       }
@@ -120,33 +139,42 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
     }
   }
 
-  // 5. Poblar masa instanciada de pasto, flores, ramas y arbustos decorativos en VRAM
+  // 5. Poblar masa masiva instanciada de pasto, flores, ramas y arbustos decorativos en VRAM (650+ elementos)
   const tiposInstancias: { [key: string]: Matrix4[] } = {
     'assets/vegetation/Grass_Large.gltf': [],
     'assets/vegetation/Grass_Small.gltf': [],
+    'assets/vegetation/Grass_Large_Extruded.gltf': [],
     'assets/vegetation/Flower_1_Clump.gltf': [],
     'assets/vegetation/Flower_2_Clump.gltf': [],
+    'assets/vegetation/Flower_3_Clump.gltf': [],
+    'assets/vegetation/Bush.gltf': [],
     'assets/vegetation/Bush_Large.gltf': [],
+    'assets/vegetation/Bush_Small.gltf': [],
+    'assets/vegetation/Bush_Flowers.gltf': [],
+    'assets/vegetation/Bush_Large_Flowers.gltf': [],
     'assets/vegetation/Bush_Small_Flowers.gltf': [],
     'assets/vegetation/Plant_1.fbx': [],
+    'assets/vegetation/Plant_2.fbx': [],
+    'assets/vegetation/Plant_Flowers.fbx': [],
     'assets/vegetation/DeadTree_1.gltf': [],
+    'assets/vegetation/DeadTree_3.gltf': [],
   };
 
   const clavesInstancias = Object.keys(tiposInstancias);
 
-  // Sembrar 150 grupos de vegetación orgánica alrededor de la isla
-  for (let i = 0; i < 150; i++) {
-    const rx = 8 + Math.random() * (anchoTotal - 16);
-    const ry = 8 + Math.random() * (altoTotal - 16);
+  // Sembrar 650 grupos de vegetación tupida e intensa por toda la superficie
+  for (let i = 0; i < 650; i++) {
+    const rx = 4 + Math.random() * (anchoTotal - 8);
+    const ry = 4 + Math.random() * (altoTotal - 8);
     const tipoTarget = clavesInstancias[i % clavesInstancias.length];
 
     const mat = new Matrix4();
     const pos = aVector3(rx, ry, 0);
     const rotY = Math.random() * Math.PI * 2;
-    let scale = 0.8 + Math.random() * 0.5;
+    let scale = 0.8 + Math.random() * 0.6;
 
     if (tipoTarget.endsWith('.fbx')) {
-      scale = 0.012;
+      scale = 0.014;
     }
 
     mat.makeRotationY(rotY);
