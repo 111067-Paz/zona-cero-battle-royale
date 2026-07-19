@@ -94,14 +94,16 @@ import { EstadoPartidaStore } from './estado-partida.store';
 
         <!-- BANNER DE ADVERTENCIA DE ZONA -->
         @if (zona(); as z) {
-          @if (z.ticksParaProximoCambio > 0) {
-            <div class="zone-warn is-on" role="status">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 9v4m0 4h.01M10.3 4.3 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z" stroke-linejoin="round"/>
-              </svg>
+          <div class="zone-warn is-on" role="status">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 9v4m0 4h.01M10.3 4.3 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z" stroke-linejoin="round"/>
+            </svg>
+            @if (z.ticksParaProximoCambio > 0) {
               Zona Cerrando · {{ gasClosing(z) }}
-            </div>
-          }
+            } @else {
+              ¡ZONA EN RADIO MÍNIMO!
+            }
+          </div>
         }
 
         <!-- PROMPT POINTER LOCK -->
@@ -121,7 +123,8 @@ import { EstadoPartidaStore } from './estado-partida.store';
         <section class="zone-map" aria-label="Minimapa">
           @if (zona(); as z) {
             <div class="minimap panel">
-              <div class="zone-circle" [style.left.%]="zonaCx(z)" [style.top.%]="zonaCy(z)" [style.width.%]="zonaR(z) * 2" [style.height.%]="zonaR(z) * 2"></div>
+              <div class="zone-circle-next" [style.left.px]="zonaCx(z)" [style.top.px]="zonaCy(z)" [style.width.px]="zonaRProxima(z) * 2" [style.height.px]="zonaRProxima(z) * 2"></div>
+              <div class="zone-circle" [style.left.px]="zonaCx(z)" [style.top.px]="zonaCy(z)" [style.width.px]="zonaR(z) * 2" [style.height.px]="zonaR(z) * 2"></div>
               <div class="map-player"></div>
             </div>
           }
@@ -608,9 +611,17 @@ import { EstadoPartidaStore } from './estado-partida.store';
       .zone-circle {
         position: absolute;
         transform: translate(-50%, -50%);
-        border: 1.5px solid oklch(0.75 0.14 230 / 0.75);
+        border: 1.5px solid oklch(0.65 0.18 145);
         border-radius: 50%;
-        box-shadow: 0 0 0 1px oklch(0.75 0.14 230 / 0.15);
+        background: oklch(0.65 0.18 145 / 0.15);
+        pointer-events: none;
+      }
+      .zone-circle-next {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        border: 1.5px dashed oklch(0.85 0.18 85 / 0.8);
+        border-radius: 50%;
+        pointer-events: none;
       }
       .map-player {
         position: absolute;
@@ -846,21 +857,25 @@ export class HudComponent {
   zonaCx(zona: { cx: number }): number {
     const yo = this.jugador();
     if (yo === null) {
-      return 50;
+      return 75;
     }
-    return 50 + this.aEscalaRadar(zona.cx - yo.x);
+    return 75 + this.aEscalaRadar(zona.cx - yo.x);
   }
 
   zonaCy(zona: { cy: number }): number {
     const yo = this.jugador();
     if (yo === null) {
-      return 50;
+      return 75;
     }
-    return 50 + this.aEscalaRadar(zona.cy - yo.y);
+    return 75 + this.aEscalaRadar(zona.cy - yo.y);
   }
 
   zonaR(zona: { radio: number }): number {
     return this.aEscalaRadar(zona.radio);
+  }
+
+  zonaRProxima(zona: { radioProximo: number }): number {
+    return this.aEscalaRadar(zona.radioProximo);
   }
 
   private aEscalaRadar(unidadesDeMundo: number): number {

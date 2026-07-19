@@ -53,6 +53,8 @@ public class ZonaSegura {
 
     private void avanzarEspera() {
         if (fase >= parametros.getCantidadFases()) {
+            ticksRestantesEnFase = 0;
+            radio = parametros.getRadioMinimo();
             return; // ya llego al radio minimo; se queda quieta
         }
         ticksRestantesEnFase--;

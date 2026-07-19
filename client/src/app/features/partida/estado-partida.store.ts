@@ -16,6 +16,7 @@ import {
   NumeroDanio,
   ProyectilVisual,
   ResultadoPartida,
+  ZonaVisual,
 } from './estado-visual';
 import { Punto, simularPasoMovimiento } from './prediccion/resolutor-colisiones';
 
@@ -387,8 +388,32 @@ export class EstadoPartidaStore {
       jugadores,
       proyectiles: this.interpolarProyectiles(anterior.proyectiles, siguiente.proyectiles, t),
       numerosDanio: this.numerosDanio,
-      zona: this.aZonaVisual(siguiente),
+      zona: this.interpolarZona(anterior.zona, siguiente.zona, t),
       botines: this.aBotinesVisual(siguiente),
+    };
+  }
+
+  private aZonaVisualDirecta(zona: NonNullable<Snapshot['zona']>): ZonaVisual {
+    return {
+      cx: zona.cx,
+      cy: zona.cy,
+      radio: zona.radio,
+      radioProximo: zona.radioProximo,
+    };
+  }
+
+  private interpolarZona(
+    anterior: Snapshot['zona'],
+    siguiente: Snapshot['zona'],
+    t: number,
+  ): ZonaVisual | null {
+    if (siguiente === null) return null;
+    if (anterior === null) return this.aZonaVisualDirecta(siguiente);
+    return {
+      cx: this.lerp(anterior.cx, siguiente.cx, t),
+      cy: this.lerp(anterior.cy, siguiente.cy, t),
+      radio: this.lerp(anterior.radio, siguiente.radio, t),
+      radioProximo: this.lerp(anterior.radioProximo, siguiente.radioProximo, t),
     };
   }
 

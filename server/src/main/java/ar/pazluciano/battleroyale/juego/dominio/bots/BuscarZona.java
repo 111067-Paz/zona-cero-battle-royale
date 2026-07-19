@@ -19,7 +19,11 @@ public class BuscarZona implements EstadoComportamiento {
             return estados.merodeando();
         }
         Vector2 direccion = direccionDeEscape(contexto);
-        contexto.aplicarIntencion(direccion, Math.atan2(direccion.getY(), direccion.getX()), false);
+        if (direccion.longitud() > 1e-6) {
+            contexto.aplicarIntencion(direccion, Math.atan2(direccion.getY(), direccion.getX()), false);
+        } else {
+            contexto.aplicarIntencion(new Vector2(1, 0), 0.0, false);
+        }
         return this;
     }
 
