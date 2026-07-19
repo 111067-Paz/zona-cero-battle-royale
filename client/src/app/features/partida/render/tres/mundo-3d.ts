@@ -9,6 +9,7 @@ import {
   Group,
   IcosahedronGeometry,
   Mesh,
+  MeshBasicMaterial,
   MeshToonMaterial,
   Object3D,
   PlaneGeometry,
@@ -55,6 +56,7 @@ export interface Mundo3D {
   grupo: Group;
   arboles: readonly ArbolAnimado[];
   aguas: readonly AguaAnimada[];
+  planosOrientables: Object3D[]; // Planos 2D de copas y arbustos que rotaran hacia la camara
   dispose(): void;
 }
 
@@ -83,6 +85,7 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
   const gradiente = crearGradienteToon();
   const arboles: ArbolAnimado[] = [];
   const aguas: AguaAnimada[] = [];
+  const planosOrientables: Object3D[] = [];
 
   const especificacionCaja = especificacionObstaculo('CAJA');
   const recursos: RecursosMundo = {
@@ -103,12 +106,12 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
   grupo.add(suelo);
 
   for (const decoracion of mapa.decoraciones) {
-    const objeto = construirDecoracion(decoracion, gradiente, aguas);
+    const objeto = construirDecoracion(decoracion, gradiente, aguas, planosOrientables);
     grupo.add(objeto);
   }
 
   for (const obstaculo of mapa.obstaculos) {
-    const resultado = construirObstaculo(obstaculo, recursos);
+    const resultado = construirObstaculo(obstaculo, recursos, planosOrientables);
     grupo.add(resultado.objeto);
     resultado.copas?.forEach((copa, indice) => {
       const fase = semillaDeterministica(obstaculo.x + indice * 13.7, obstaculo.y + indice * 5.3) * Math.PI * 2;
@@ -120,6 +123,7 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
     grupo,
     arboles,
     aguas,
+    planosOrientables,
     dispose(): void {
       // dispose() de Three es idempotente: los cajones comparten geometria/material y se
       // liberan muchas veces sin problema — no hace falta llevar un registro aparte.
@@ -139,13 +143,13 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
   };
 }
 
-function construirObstaculo(rectangulo: RectanguloMapa, recursos: RecursosMundo): ResultadoObstaculo {
+function construirObstaculo(rectangulo: RectanguloMapa, recursos: RecursosMundo, planosOrientables: Object3D[]): ResultadoObstaculo {
   const especificacion = especificacionObstaculo(rectangulo.tipo);
   switch (rectangulo.tipo) {
     case 'CAJA':
       return construirCaja(rectangulo, especificacion, recursos);
     case 'ARBOL':
-      return construirArbol(rectangulo, especificacion, recursos.gradiente);
+      return construirArbol(rectangulo, especificacion, recursos.gradiente, planosOrientables);
     case 'ROCA':
       return construirRoca(rectangulo, especificacion, recursos.gradiente);
     case 'CARPA':
@@ -225,7 +229,12 @@ function construirCaja(rectangulo: RectanguloMapa, especificacion: Especificacio
 }
 
 /** ARBOL: arboleda de 1-5 arboles (tronco conico + copa multicapa) segun el area de la huella. */
-function construirArbol(rectangulo: RectanguloMapa, especificacion: EspecificacionObstaculo, gradiente: DataTexture): ResultadoObstaculo {
+function construirArbol(
+  rectangulo: RectanguloMapa,
+  especificacion: EspecificacionObstaculo,
+  gradiente: DataTexture,
+  planosOrientables: Object3D[],
+): ResultadoObstaculo {
   const alturaMundo = especificacion.alturaPx * ALTURA_POR_PIXEL;
   const area = rectangulo.ancho * rectangulo.alto;
   const cantidad = Math.min(5, Math.max(1, Math.round(area / 140)));
@@ -241,34 +250,19 @@ function construirArbol(rectangulo: RectanguloMapa, especificacion: Especificaci
     const alturaTronco = alturaArbol * 0.4;
 
     const tronco = new Mesh(
-      new CylinderGeometry(radioCopa * 0.14, radioCopa * 0.32, alturaTronco, 6),
+      new CylinderGeometry(radioCopa * 0.14, radioCopa * 0.32, alturaTronco, 16),
       new MeshToonMaterial({ color: especificacion.colorSecundario, gradientMap: gradiente }),
     );
     tronco.position.copy(aVector3(posicion.x, posicion.y, alturaTronco / 2));
     grupo.add(tronco);
 
     const copa = new Group();
-    const colorBase = lerpColor(especificacion.colorPrincipal, 0x000000, 0.12 * semilla);
-    const esferaBase = new Mesh(new SphereGeometry(radioCopa, 8, 6), new MeshToonMaterial({ color: colorBase, gradientMap: gradiente }));
-    esferaBase.position.y = radioCopa * 0.5;
-    copa.add(esferaBase);
-
-    const desplazamiento = semillaDeterministica(posicion.x, posicion.y) - 0.5;
-    const esferaMedia = new Mesh(
-      new SphereGeometry(radioCopa * 0.72, 8, 6),
-      new MeshToonMaterial({ color: lerpColor(especificacion.colorPrincipal, 0xffffff, 0.1), gradientMap: gradiente }),
-    );
-    esferaMedia.position.set(desplazamiento * radioCopa * 0.4, radioCopa * 1.15, desplazamiento * radioCopa * 0.4);
-    copa.add(esferaMedia);
-
-    if (radioCopa > 2) {
-      const esferaTope = new Mesh(
-        new SphereGeometry(radioCopa * 0.5, 8, 6),
-        new MeshToonMaterial({ color: lerpColor(especificacion.colorPrincipal, 0xffffff, 0.2), gradientMap: gradiente }),
-      );
-      esferaTope.position.y = radioCopa * 1.7;
-      copa.add(esferaTope);
-    }
+    const copaTex = crearTexturaCopaArbol(especificacion.colorPrincipal, semilla);
+    const copaMat = new MeshBasicMaterial({ map: copaTex, transparent: true, side: DoubleSide });
+    const planoCopa = new Mesh(new PlaneGeometry(radioCopa * 2.5, radioCopa * 2.5), copaMat);
+    planoCopa.position.y = radioCopa * 0.95;
+    copa.add(planoCopa);
+    planosOrientables.push(planoCopa);
 
     // El Group entero pivota en la union con el tronco: el sway de B5 rota `copa.rotation.z` ahi.
     copa.position.copy(aVector3(posicion.x, posicion.y, alturaTronco));
@@ -372,8 +366,13 @@ function construirCarpa(rectangulo: RectanguloMapa, especificacion: Especificaci
   return { objeto: grupo };
 }
 
-function construirDecoracion(decoracion: DecoracionMapa, gradiente: DataTexture, aguas: AguaAnimada[]): Object3D {
-  const centro = aVector3(decoracion.x + decoracion.ancho / 2, decoracion.y + decoracion.alto / 2, 0.02);
+function construirDecoracion(
+  decoracion: DecoracionMapa,
+  gradiente: DataTexture,
+  aguas: AguaAnimada[],
+  planosOrientables: Object3D[],
+): Object3D {
+  const centro = aVector3(decoracion.x + decoracion.ancho / 2, decoracion.y + decoracion.alto / 2);
   switch (decoracion.tipo) {
     case 'RIO':
     case 'LAGO': {
@@ -409,21 +408,16 @@ function construirDecoracion(decoracion: DecoracionMapa, gradiente: DataTexture,
     case 'ARBUSTO': {
       const grupo = new Group();
       const radioBase = Math.min(decoracion.ancho, decoracion.alto) / 2;
-      for (let i = 0; i < CANTIDAD_BOLAS_ARBUSTO; i++) {
-        const semilla = semillaDeterministica(decoracion.x + i * 5.3, decoracion.y + i * 2.9);
-        const semillaY = semillaDeterministica(decoracion.y + i * 3.7, decoracion.x + i * 6.1);
-        const radio = radioBase * (0.55 + semilla * 0.25);
-        const bola = new Mesh(
-          new SphereGeometry(radio, 8, 6),
-          new MeshToonMaterial({ color: i === 0 ? COLOR_ARBUSTO_CLARO : COLOR_ARBUSTO, gradientMap: gradiente }),
-        );
-        bola.position.copy(aVector3(
-          decoracion.x + decoracion.ancho / 2 + (semilla - 0.5) * radioBase,
-          decoracion.y + decoracion.alto / 2 + (semillaY - 0.5) * radioBase,
-          radio * 0.7,
-        ));
-        grupo.add(bola);
-      }
+      const arbustoTex = crearTexturaArbusto(COLOR_ARBUSTO);
+      const arbustoMat = new MeshBasicMaterial({ map: arbustoTex, transparent: true, side: DoubleSide });
+      const planoArbusto = new Mesh(new PlaneGeometry(radioBase * 2.2, radioBase * 2.2), arbustoMat);
+      planoArbusto.position.copy(aVector3(
+        decoracion.x + decoracion.ancho / 2,
+        decoracion.y + decoracion.alto / 2,
+        radioBase * 0.95
+      ));
+      grupo.add(planoArbusto);
+      planosOrientables.push(planoArbusto);
       return grupo;
     }
     default: {
@@ -520,4 +514,122 @@ function texturaMadera(colorPrincipal: number, colorSecundario: number): CanvasT
 
 function colorCss(color: number): string {
   return '#' + color.toString(16).padStart(6, '0');
+}
+
+function crearTexturaCopaArbol(colorPrincipal: number, semilla: number): CanvasTexture {
+  const tam = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = tam;
+  canvas.height = tam;
+  const ctx = canvas.getContext('2d');
+  if (ctx === null) throw new Error('No se pudo obtener el contexto 2d');
+
+  const cBase = colorCss(colorPrincipal);
+  const cSombra = colorCss(lerpColor(colorPrincipal, 0x000000, 0.25));
+  const cBrillo = colorCss(lerpColor(colorPrincipal, 0xffffff, 0.2));
+
+  const cx = tam / 2;
+  const cy = tam / 2 + 10;
+
+  // Dibuja una nube de hojas toon (círculos interconectados)
+  ctx.fillStyle = cBase;
+  ctx.strokeStyle = '#111424';
+  ctx.lineWidth = 9;
+
+  ctx.beginPath();
+  // Circulo inferior izquierdo
+  ctx.arc(cx - 38, cy + 20, 52, 0, Math.PI * 2);
+  // Circulo inferior derecho
+  ctx.arc(cx + 38, cy + 20, 52, 0, Math.PI * 2);
+  // Circulo superior
+  ctx.arc(cx, cy - 25, 62, 0, Math.PI * 2);
+  // Circulo medio
+  ctx.arc(cx - 10, cy + 5, 58, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // Relleno con degradado para volumen
+  const grad = ctx.createLinearGradient(cx, cy - 80, cx, cy + 70);
+  grad.addColorStop(0, cBrillo);
+  grad.addColorStop(0.4, cBase);
+  grad.addColorStop(1, cSombra);
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx - 38, cy + 20, 48, 0, Math.PI * 2);
+  ctx.arc(cx + 38, cy + 20, 48, 0, Math.PI * 2);
+  ctx.arc(cx, cy - 25, 58, 0, Math.PI * 2);
+  ctx.arc(cx - 10, cy + 5, 54, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Ramitas e iluminación interior Toon (líneas de brillo/sombra de estilo ilustración)
+  ctx.strokeStyle = cBrillo;
+  ctx.lineWidth = 7;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  // Brillos internos
+  ctx.arc(cx - 25, cy - 40, 22, Math.PI * 1.1, Math.PI * 1.6);
+  ctx.stroke();
+
+  ctx.strokeStyle = cSombra;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  // Sombras internas
+  ctx.arc(cx + 25, cy + 30, 25, Math.PI * 0.1, Math.PI * 0.6);
+  ctx.stroke();
+
+  return new CanvasTexture(canvas);
+}
+
+function crearTexturaArbusto(colorPrincipal: number): CanvasTexture {
+  const tam = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = tam;
+  canvas.height = tam;
+  const ctx = canvas.getContext('2d');
+  if (ctx === null) throw new Error('No se pudo obtener el contexto 2d');
+
+  const cBase = colorCss(colorPrincipal);
+  const cSombra = colorCss(lerpColor(colorPrincipal, 0x000000, 0.28));
+  const cBrillo = colorCss(lerpColor(colorPrincipal, 0xffffff, 0.25));
+
+  const cx = tam / 2;
+  const cy = tam / 2 + 10;
+
+  ctx.fillStyle = cBase;
+  ctx.strokeStyle = '#111424';
+  ctx.lineWidth = 8;
+
+  // Silueta del arbusto Toon
+  ctx.beginPath();
+  ctx.arc(cx - 40, cy + 15, 45, 0, Math.PI * 2);
+  ctx.arc(cx + 40, cy + 15, 45, 0, Math.PI * 2);
+  ctx.arc(cx, cy - 20, 52, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // Relleno con degradado radial
+  const grad = ctx.createRadialGradient(cx - 15, cy - 15, 10, cx, cy, 75);
+  grad.addColorStop(0, cBrillo);
+  grad.addColorStop(0.5, cBase);
+  grad.addColorStop(1, cSombra);
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx - 40, cy + 15, 41, 0, Math.PI * 2);
+  ctx.arc(cx + 40, cy + 15, 41, 0, Math.PI * 2);
+  ctx.arc(cx, cy - 20, 48, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Detalle de hojitas Toon
+  ctx.strokeStyle = cBrillo;
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(cx - 20, cy - 25, 16, Math.PI * 1.2, Math.PI * 1.7);
+  ctx.stroke();
+
+  return new CanvasTexture(canvas);
 }

@@ -10,5 +10,5 @@ package ar.pazluciano.battleroyale.juego.dominio.partida;
  * interfaz sellada — por eso {@code EventoKill} vive aca y no en {@code dominio.combate}.
  */
 public sealed interface EventoDominio
-        permits EventoKill, EventoRecogido, EventoMuerteZona, EventoFinPartida {
+        permits EventoKill, EventoRecogido, EventoMuerteZona, EventoFinPartida, EventoImpacto {
 }

@@ -120,4 +120,33 @@ class PartidaCombateTest {
         assertEquals(EstadoVida.MUERTO, b.getEstadoVida());
         assertEquals(killsDeBAntes, b.getKills());
     }
+
+    @Test
+    @DisplayName("al impactar un proyectil sobre un rival se emite un EventoImpacto con las coordenadas y dano")
+    void avanzarTick_proyectilImpactaRival_emiteEventoImpacto() {
+        Partida partida = partida();
+        Jugador a = partida.agregarJugador("A"); // (10, 50)
+        Jugador b = partida.agregarJugador("B"); // (16, 50)
+        partida.aplicarInput("A", 1L, Vector2.CERO, 0.0, true, List.of()); // apunta a B
+
+        // Limpiamos los eventos estructurales de unión
+        partida.drenarEventos();
+
+        // Avanzamos ticks hasta el impacto
+        boolean impactoDetectado = false;
+        for (int i = 0; i < 20; i++) {
+            partida.avanzarTick();
+            List<EventoDominio> eventos = partida.drenarEventos();
+            for (EventoDominio ev : eventos) {
+                if (ev instanceof EventoImpacto imp) {
+                    assertEquals("B", imp.getIdVictima());
+                    assertTrue(imp.getDano() > 0);
+                    assertEquals(16.0, imp.getX(), 0.01);
+                    assertEquals(50.0, imp.getY(), 0.01);
+                    impactoDetectado = true;
+                }
+            }
+        }
+        assertTrue(impactoDetectado);
+    }
 }

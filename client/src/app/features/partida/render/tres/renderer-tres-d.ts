@@ -26,7 +26,7 @@ import { construirMundo3D, Mundo3D } from './mundo-3d';
 import { aVector3, crearGradienteToon, crearSpriteCanvas, direccionDesdeAngulo, SpriteCanvas } from './utiles-3d';
 import { construirZona3D, Zona3D } from './zona-3d';
 
-const COLOR_CIELO = 0x8fd3f4;
+const COLOR_CIELO = 0xbae6fd;
 const COLOR_CESPED = 0x82c341;
 const COLOR_ANILLO_PROPIO = 0xffcc00;
 const COLOR_PROYECTIL = 0xffee44;
@@ -100,6 +100,9 @@ export class RendererTresD implements RendererJuego {
   private readonly textosDanio: TextoDanio[] = [];
   private ultimaPoseCamara: { posicion: Vector3; mira: Vector3 } | null = null;
 
+  private pitch = 0.6; // Ángulo vertical inicial (~34 grados)
+  private alMoverMouse: ((e: MouseEvent) => void) | null = null;
+
   async iniciar(canvas: HTMLCanvasElement): Promise<void> {
     this.canvas = canvas;
     const renderer = new WebGLRenderer({ canvas, antialias: true });
@@ -116,9 +119,9 @@ export class RendererTresD implements RendererJuego {
     camera.position.set(0, 6, 10);
     camera.lookAt(0, 0, 0);
 
-    scene.add(new AmbientLight(0xffffff, 0.7));
-    const direccional = new DirectionalLight(0xffffff, 1.0);
-    direccional.position.set(-20, 30, 10);
+    scene.add(new AmbientLight(0xe0f2fe, 0.85));
+    const direccional = new DirectionalLight(0xfef08a, 1.15);
+    direccional.position.set(-20, 40, 15);
     scene.add(direccional);
 
     // Suelo placeholder hasta que llegue establecerMapa() (el mapa baja por REST despues de BIENVENIDA).
@@ -148,10 +151,18 @@ export class RendererTresD implements RendererJuego {
       scene.add(sprite.sprite);
       this.textosDanio.push({ sprite, textoActual: null });
     }
-
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
+
+    // Escuchar movimiento vertical del mouse para control de cámara orbital completo (pitch)
+    this.alMoverMouse = (e: MouseEvent) => {
+      if (document.pointerLockElement === canvas) {
+        // Limitar pitch entre 0.1 (cerca del suelo) y 1.4 (casi cenital)
+        this.pitch = Math.max(0.1, Math.min(1.4, this.pitch + e.movementY * 0.003));
+      }
+    };
+    window.addEventListener('mousemove', this.alMoverMouse);
 
     this.resizeObserver = new ResizeObserver(() => this.ajustarAlContenedor());
     if (canvas.parentElement !== null) {
@@ -190,6 +201,19 @@ export class RendererTresD implements RendererJuego {
     this.actualizarNumerosDanio(estado.numerosDanio);
     this.actualizarCamara(estado.jugadores, idJugadorPropio);
     this.animarMundo(ahoraMs);
+
+    // 1. Orientar chibis hacia la camara (billboard cilindrico para no inclinarlos sobre Z)
+    for (const entidad of this.jugadores.values()) {
+      entidad.rig.raiz.lookAt(new Vector3(this.camera.position.x, entidad.rig.raiz.position.y, this.camera.position.z));
+    }
+
+    // 2. Orientar copas de arboles y arbustos hacia la camara (billboards)
+    if (this.mundo && this.mundo.planosOrientables) {
+      for (const plano of this.mundo.planosOrientables) {
+        plano.lookAt(new Vector3(this.camera.position.x, plano.position.y, this.camera.position.z));
+      }
+    }
+
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -230,8 +254,8 @@ export class RendererTresD implements RendererJuego {
     anillo.visible = false;
     rig.raiz.add(anillo);
 
-    const hp = crearSpriteCanvas(64, 8, { x: 0.6, y: 0.15 });
-    hp.sprite.position.y = ALTURA_TOPE_CABEZA + 0.25;
+    const hp = crearSpriteCanvas(80, 16, { x: 0.8, y: 0.16 });
+    hp.sprite.position.y = ALTURA_TOPE_CABEZA + 0.35;
     rig.raiz.add(hp.sprite);
 
     return { rig, anillo, hp, hpMostrado: null, muerto: false, posicionAnterior: null };
@@ -250,6 +274,14 @@ export class RendererTresD implements RendererJuego {
     }
     if (!muerto) {
       entidad.rig.raiz.rotation.y = -jugador.angulo;
+    }
+
+    // Dibujar el arma equipada actualmente en la mano del personaje
+    if (entidad.rig.armas) {
+      const armaActual = jugador.arma;
+      for (const [tipo, mesh] of Object.entries(entidad.rig.armas)) {
+        mesh.visible = !muerto && (tipo === armaActual);
+      }
     }
 
     const moviendo = !muerto && distanciaMovida > UMBRAL_MOVIMIENTO_BOBBING;
@@ -278,12 +310,33 @@ export class RendererTresD implements RendererJuego {
     const fraccion = Math.max(0, Math.min(1, valor / VIDA_MAX));
     const color = fraccion > 0.5 ? '#4ade80' : fraccion > 0.25 ? '#ffcc00' : '#ff4444';
     hp.redibujar((ctx, ancho, alto) => {
-      ctx.fillStyle = '#111424';
+      // Fondo negro de la barra
+      ctx.fillStyle = 'rgba(17, 20, 36, 0.8)';
       ctx.fillRect(0, 0, ancho, alto);
+      
+      // Barra rellena interna con margen de 2px
       if (fraccion > 0) {
         ctx.fillStyle = color;
-        ctx.fillRect(1, 1, (ancho - 2) * fraccion, alto - 2);
+        ctx.fillRect(2, 2, (ancho - 4) * fraccion, alto - 4);
       }
+
+      // Contorno negro grueso
+      ctx.strokeStyle = '#111424';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(1.5, 1.5, ancho - 3, alto - 3);
+
+      // Texto de vida (ej: 78/100)
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 10px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Sombra de texto para legibilidad
+      ctx.strokeStyle = '#111424';
+      ctx.lineWidth = 2.5;
+      const texto = `${valor}/100`;
+      ctx.strokeText(texto, ancho / 2, alto / 2);
+      ctx.fillText(texto, ancho / 2, alto / 2);
     });
   }
 
@@ -407,9 +460,16 @@ export class RendererTresD implements RendererJuego {
       return;
     }
     const centro = aVector3(propio.x, propio.y, 0);
-    const direccion = direccionDesdeAngulo(propio.angulo);
-    const posicion = centro.clone().addScaledVector(direccion, -DISTANCIA_CAMARA).add(new Vector3(0, ALTURA_CAMARA, 0));
-    const mira = centro.clone().addScaledVector(direccion, DISTANCIA_MIRA).add(new Vector3(0, ALTURA_MIRA, 0));
+    const yaw = propio.angulo;
+    const d = DISTANCIA_CAMARA;
+
+    // Posición orbital esférica 3D completa usando yaw (giro horizontal) y pitch (giro vertical del mouse)
+    const dx = -d * Math.cos(this.pitch) * Math.cos(yaw);
+    const dy = d * Math.sin(this.pitch);
+    const dz = -d * Math.cos(this.pitch) * Math.sin(yaw);
+
+    const posicion = centro.clone().add(new Vector3(dx, dy, dz));
+    const mira = centro.clone().add(new Vector3(0, ALTURA_MIRA, 0));
     this.camera.position.copy(posicion);
     this.camera.lookAt(mira);
     this.ultimaPoseCamara = { posicion, mira };
@@ -420,6 +480,10 @@ export class RendererTresD implements RendererJuego {
   }
 
   destruir(): void {
+    if (this.alMoverMouse !== null) {
+      window.removeEventListener('mousemove', this.alMoverMouse);
+      this.alMoverMouse = null;
+    }
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.mundo?.dispose();

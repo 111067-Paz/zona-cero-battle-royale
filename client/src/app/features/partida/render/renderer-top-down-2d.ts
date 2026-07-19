@@ -340,40 +340,39 @@ export class RendererTopDown2D implements RendererJuego {
     }
   }
 
-  /** Caja de madera: relleno + refuerzo en X + bisel (luz arriba/izq, sombra abajo/der) + marco fino. */
   private dibujarCaja(rect: RectanguloPantalla, especificacion: EspecificacionObstaculo): void {
+    const bordeNegro = { width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE };
+    
+    // 1. Cuerpo del cajón con colorPrincipal y borde grueso
     this.graficos
       .rect(rect.x, rect.y, rect.ancho, rect.alto)
       .fill(especificacion.colorPrincipal)
-      .stroke({ width: RendererTopDown2D.GROSOR_BORDE, color: RendererTopDown2D.COLOR_BORDE });
+      .stroke(bordeNegro);
 
-    const inset = Math.min(3, rect.ancho * 0.1, rect.alto * 0.1);
-    const grosorX = Math.max(2, rect.ancho * 0.06);
+    // 2. Trazar 2 líneas horizontales divisorias (para formar 3 tablones de madera) con contorno negro
+    const hTercio = rect.alto / 3;
     this.graficos
-      .moveTo(rect.x + inset, rect.y + inset)
-      .lineTo(rect.x + rect.ancho - inset, rect.y + rect.alto - inset)
-      .stroke({ width: grosorX, color: especificacion.colorSecundario });
+      .moveTo(rect.x, rect.y + hTercio)
+      .lineTo(rect.x + rect.ancho, rect.y + hTercio)
+      .stroke({ width: 2.5, color: RendererTopDown2D.COLOR_BORDE });
     this.graficos
-      .moveTo(rect.x + rect.ancho - inset, rect.y + inset)
-      .lineTo(rect.x + inset, rect.y + rect.alto - inset)
-      .stroke({ width: grosorX, color: especificacion.colorSecundario });
+      .moveTo(rect.x, rect.y + hTercio * 2)
+      .lineTo(rect.x + rect.ancho, rect.y + hTercio * 2)
+      .stroke({ width: 2.5, color: RendererTopDown2D.COLOR_BORDE });
 
-    const colorClaro = lerpColor(especificacion.colorPrincipal, 0xffffff, 0.3);
-    const colorOscuro = lerpColor(especificacion.colorPrincipal, 0x000000, 0.3);
+    // 3. Dibujar la diagonal cruzada (refuerzo) con colorSecundario y borde negro
+    const inset = 4;
     this.graficos
       .moveTo(rect.x + inset, rect.y + rect.alto - inset)
-      .lineTo(rect.x + inset, rect.y + inset)
       .lineTo(rect.x + rect.ancho - inset, rect.y + inset)
-      .stroke({ width: 2, color: colorClaro });
+      // Primero dibujamos la silueta negra del refuerzo
+      .stroke({ width: Math.max(6, rect.ancho * 0.14), color: RendererTopDown2D.COLOR_BORDE });
+      
+    // Luego rellenamos con el colorSecundario en el centro para dar el efecto de tablón diagonal
     this.graficos
       .moveTo(rect.x + inset, rect.y + rect.alto - inset)
-      .lineTo(rect.x + rect.ancho - inset, rect.y + rect.alto - inset)
       .lineTo(rect.x + rect.ancho - inset, rect.y + inset)
-      .stroke({ width: 2, color: colorOscuro });
-
-    this.graficos
-      .rect(rect.x + 1.5, rect.y + 1.5, Math.max(rect.ancho - 3, 0), Math.max(rect.alto - 3, 0))
-      .stroke({ width: 1.5, color: especificacion.colorSecundario });
+      .stroke({ width: Math.max(3, rect.ancho * 0.08), color: especificacion.colorSecundario });
   }
 
   /** Arbol: sombra proyectada + copa en 3 capas (rim oscuro, principal, highlight) para dar volumen. */

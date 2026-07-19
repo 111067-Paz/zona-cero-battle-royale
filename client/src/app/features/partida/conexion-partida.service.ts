@@ -35,6 +35,8 @@ export class ConexionPartidaService {
   readonly mensajes$: Observable<MensajeServidor> = this.mensajesSubject.asObservable();
   readonly abierto$: Observable<void> = this.abiertoSubject.asObservable();
   readonly estado = signal<EstadoConexion>('desconectado');
+  readonly ultimoSnapshotBytes = signal<number | null>(null);
+  readonly snapshotsRecibidos = signal(0);
 
   conectar(ruta = '/ws/partida'): void {
     this.url = ruta;
@@ -110,6 +112,10 @@ export class ConexionPartidaService {
     }
     if (mensaje.tipo === 'BIENVENIDA') {
       this.bienvenidaRecibida = true;
+    }
+    if (mensaje.tipo === 'SNAPSHOT') {
+      this.ultimoSnapshotBytes.set(new TextEncoder().encode(data).length);
+      this.snapshotsRecibidos.update((cantidad) => cantidad + 1);
     }
     this.mensajesSubject.next(mensaje);
   }

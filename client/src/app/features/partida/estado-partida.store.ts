@@ -252,6 +252,17 @@ export class EstadoPartidaStore {
       this.aplicarFinPartida(evento.datos);
       return;
     }
+    if (evento.evento === 'IMPACTO') {
+      const x = Number(evento.datos['x'] ?? 0);
+      const y = Number(evento.datos['y'] ?? 0);
+      const cantidad = Number(evento.datos['dano'] ?? 0);
+      const ahora = performance.now();
+      this.numerosDanio.push({ x, y, cantidad, creadoEn: ahora });
+      this.numerosDanio = this.numerosDanio.filter(
+        (numero) => ahora - numero.creadoEn < EstadoPartidaStore.DURACION_DANIO_MS,
+      );
+      return;
+    }
     if (evento.evento !== 'KILL') {
       return;
     }
@@ -347,20 +358,7 @@ export class EstadoPartidaStore {
   }
 
   private registrarDanios(previo: Snapshot | null, actual: Snapshot): void {
-    if (previo === null) {
-      return;
-    }
     const ahora = performance.now();
-    const hpPrevio = new Map<string, number>();
-    for (const jugador of previo.jugadores) {
-      hpPrevio.set(jugador.id, jugador.hp);
-    }
-    for (const jugador of actual.jugadores) {
-      const anterior = hpPrevio.get(jugador.id);
-      if (anterior !== undefined && jugador.hp < anterior) {
-        this.numerosDanio.push({ x: jugador.x, y: jugador.y, cantidad: anterior - jugador.hp, creadoEn: ahora });
-      }
-    }
     this.numerosDanio = this.numerosDanio.filter(
       (numero) => ahora - numero.creadoEn < EstadoPartidaStore.DURACION_DANIO_MS,
     );
@@ -434,6 +432,7 @@ export class EstadoPartidaStore {
       estadoVida: destino.estadoVida,
       conectado: destino.conectado,
       personaje: destino.personaje,
+      arma: destino.arma,
     };
   }
 
@@ -481,6 +480,7 @@ export class EstadoPartidaStore {
       estadoVida: jugador.estadoVida,
       conectado: jugador.conectado,
       personaje: jugador.personaje,
+      arma: jugador.arma,
     };
   }
 

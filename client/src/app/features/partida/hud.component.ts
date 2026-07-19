@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { PersonajeRetratoComponent } from '../../shared/personaje-retrato.component';
+import { ConexionPartidaService } from './conexion-partida.service';
 import { EntradaService } from './entrada.service';
 import { EstadoPartidaStore } from './estado-partida.store';
 
@@ -39,6 +40,7 @@ import { EstadoPartidaStore } from './estado-partida.store';
         <span class="chip chip--negro">TIME: {{ tiempoTranscurrido() }}</span>
         <span class="chip chip--negro">KILLS: {{ yo.kills }}</span>
         <span class="chip chip--negro">PING: {{ ping() === null ? '--' : ping() + 'ms' }}</span>
+        <span class="chip chip--negro">SIZE: {{ bytesSnapshot() }}</span>
       </div>
 
       <div class="hud-inferior-izq">
@@ -265,12 +267,17 @@ export class HudComponent {
 
   private readonly store = inject(EstadoPartidaStore);
   private readonly entrada = inject(EntradaService);
+  private readonly conexion = inject(ConexionPartidaService);
 
   readonly jugador = this.store.jugadorPropio;
   readonly vivos = this.store.vivos;
   readonly killFeed = this.store.killFeed;
   /** RTT estimado por sec/ack (F7): sirve para validar "sin goma" mientras se prueba con latencia. */
   readonly ping = this.store.rttMs;
+  readonly bytesSnapshot = computed(() => {
+    const bytes = this.conexion.ultimoSnapshotBytes();
+    return bytes === null ? '--' : bytes + ' B';
+  });
 
   readonly zona = computed(() => this.store.ultimoSnapshot()?.zona ?? null);
 

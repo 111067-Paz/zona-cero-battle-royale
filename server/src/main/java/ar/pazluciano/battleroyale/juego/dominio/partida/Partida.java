@@ -301,6 +301,14 @@ public class Partida implements VistaMundo {
     private void aplicarImpacto(Proyectil proyectil, Jugador victima) {
         boolean estabaVivo = victima.estaVivo();
         victima.recibirDanio(proyectil.getDano());
+        if (estabaVivo) {
+            eventosPendientes.add(new EventoImpacto(
+                    victima.getId(),
+                    proyectil.getDano(),
+                    victima.getPosicion().getX(),
+                    victima.getPosicion().getY()
+            ));
+        }
         if (estabaVivo && !victima.estaVivo()) {
             buscarJugador(proyectil.getIdDueno()).ifPresent(Jugador::sumarKill);
             eventosPendientes.add(new EventoKill(proyectil.getIdDueno(), victima.getId(), proyectil.getArma()));

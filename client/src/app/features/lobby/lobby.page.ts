@@ -115,20 +115,32 @@ interface MisionDecorativa {
                   [attr.aria-pressed]="opcion === personajeActual()"
                   class="tarjeta-personaje"
                   [class.tarjeta-personaje--activa]="opcion === personajeActual()"
+                  [style.borderColor]="opcion === personajeActual() ? COLORES_CSS[opcion] : 'var(--color-thick-border)'"
+                  [style.boxShadow]="opcion === personajeActual() ? '0 0 14px ' + COLORES_CSS[opcion] + '50' : 'none'"
                 >
-                  <app-personaje-retrato [personaje]="opcion" [tamano]="72" />
+                  <!-- Rayo de poder -->
+                  @if (opcion === 'DINO' || opcion === 'ROBO_PERRO' || opcion === 'CONEJO') {
+                    <span class="tarjeta-personaje__rayo" aria-hidden="true">⚡</span>
+                  }
+
+                  <!-- Check de Listo -->
+                  @if (opcion === personajeActual()) {
+                    <span class="tarjeta-personaje__check" aria-hidden="true">✓</span>
+                  }
+
+                  <app-personaje-retrato [personaje]="opcion" [tamano]="84" />
                   <span class="tarjeta-personaje__nombre">{{ nombreDe(opcion) }}</span>
                   <!-- DECORATIVO: sin backend -->
                   <span class="tarjeta-personaje__xp" aria-hidden="true">{{ XP_DECORATIVO[opcion] }} XP</span>
-                  @if (opcion === personajeActual()) {
-                    <span class="tarjeta-personaje__listo">LISTO</span>
-                  }
+                  
+                  <span class="tarjeta-personaje__estado" [style.color]="COLORES_CSS[opcion]">
+                    [READY]
+                  </span>
                 </button>
               }
               <!-- DECORATIVO: sin backend -->
               <button type="button" disabled class="tarjeta-invitar" aria-label="Invitar amigo (proximamente)">
-                <span class="tarjeta-invitar__mas" aria-hidden="true">+</span>
-                <span class="text-xs font-bold uppercase">Invitar amigo</span>
+                <span class="tarjeta-invitar__texto">INVITE FRIEND</span>
               </button>
             </div>
 
@@ -253,56 +265,81 @@ interface MisionDecorativa {
         align-items: center;
         gap: 4px;
         border: 3px solid var(--color-thick-border);
-        border-radius: 14px;
-        padding: 10px 6px 8px;
-        background: rgba(255, 255, 255, 0.04);
+        border-radius: 16px;
+        padding: 12px 6px 10px;
+        background: #0b1528;
         cursor: pointer;
-        transition: border-color 0.15s ease-out;
+        transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out;
+        overflow: visible;
       }
       .tarjeta-personaje:disabled {
         opacity: 0.6;
         cursor: default;
       }
       .tarjeta-personaje--activa {
-        border-color: #facc15;
-        box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.35);
+        background: #0b1528;
       }
       .tarjeta-personaje__nombre {
-        font-size: 12px;
-        font-weight: 800;
+        font-size: 13px;
+        font-weight: 900;
         text-transform: uppercase;
         text-align: center;
+        color: #ffffff;
+        margin-top: 4px;
       }
       .tarjeta-personaje__xp {
         font-size: 10px;
-        opacity: 0.6;
+        font-weight: 700;
+        color: #94a3b8;
       }
-      .tarjeta-personaje__listo {
+      .tarjeta-personaje__rayo {
         position: absolute;
-        top: 6px;
-        right: 6px;
-        border-radius: 999px;
-        background: var(--color-health-lime);
-        color: #052e12;
-        font-size: 9px;
+        top: 8px;
+        left: 8px;
+        font-size: 14px;
+        color: #eab308;
+        z-index: 5;
+      }
+      .tarjeta-personaje__check {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: #22c55e;
+        color: #ffffff;
+        font-size: 11px;
         font-weight: 800;
-        padding: 1px 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2.5px solid #111424;
+        z-index: 10;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+      }
+      .tarjeta-personaje__estado {
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0.5px;
+        margin-top: 2px;
       }
       .tarjeta-invitar {
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 6px;
-        border: 3px dashed rgba(255, 255, 255, 0.35);
-        border-radius: 14px;
-        padding: 10px 6px;
-        color: rgba(255, 255, 255, 0.5);
+        border: 3px solid #1e40af;
+        border-radius: 16px;
+        padding: 12px 10px;
+        background: #0b1528;
+        cursor: default;
       }
-      .tarjeta-invitar__mas {
-        font-size: 28px;
-        font-weight: 800;
-        line-height: 1;
+      .tarjeta-invitar__texto {
+        color: #93c5fd;
+        font-size: 12px;
+        font-weight: 900;
+        text-transform: uppercase;
+        text-align: center;
       }
       .boton-play {
         height: 64px;
@@ -323,6 +360,14 @@ interface MisionDecorativa {
   ],
 })
 export class LobbyPage {
+  protected readonly COLORES_CSS: Record<Personaje, string> = {
+    GATO: '#4ade80',       // Verde neón
+    ARDILLA: '#c084fc',    // Morado neón
+    DINO: '#38bdf8',       // Azul neón
+    ROBO_PERRO: '#22d3ee', // Cian neón
+    CONEJO: '#f472b6',     // Rosa neón
+  };
+
   /** DECORATIVO: sin backend — valores fijos de ambientacion (mockup "Matchmaking Lobby"). */
   protected readonly NIVEL_DECORATIVO = 28;
   protected readonly RANGO_DECORATIVO = 'GOLD III';

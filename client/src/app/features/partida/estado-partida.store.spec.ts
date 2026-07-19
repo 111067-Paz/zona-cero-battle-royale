@@ -154,6 +154,23 @@ describe('EstadoPartidaStore', () => {
       expect(yo.y).toBeCloseTo(BASE_Y, 6);
     });
 
+    it('ackParcial_reaplicaLosInputsPosterioresSobreLaPosicionAutoritativa', () => {
+      conectar();
+      tiempo = 1000;
+      store.aplicarSnapshot(snapshot(1, [jugador('j-1', BASE_X, BASE_Y)]));
+
+      store.aplicarInputLocal(input(1, 1, 0));
+      store.aplicarInputLocal(input(2, 1, 0));
+
+      tiempo = 1050;
+      store.aplicarSnapshot(
+        snapshot(2, [jugador('j-1', BASE_X + CONFIG.velocidad * DT, BASE_Y)], [], { 'j-1': 1 }),
+      );
+
+      const yo = store.estadoVisual(1050)!.jugadores.find((j) => j.id === 'j-1')!;
+      expect(yo.x).toBeCloseTo(BASE_X + 2 * CONFIG.velocidad * DT, 6);
+    });
+
     it('el angulo propio sigue al ultimo input enviado, sin esperar el viaje de ida y vuelta', () => {
       conectar();
       tiempo = 1000;

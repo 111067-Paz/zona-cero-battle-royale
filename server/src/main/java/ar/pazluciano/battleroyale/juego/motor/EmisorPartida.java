@@ -4,6 +4,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -20,6 +21,7 @@ public class EmisorPartida {
 
     private final ObjectMapper objectMapper;
     private final Map<String, ConexionJugador> sesiones = new LinkedHashMap<>();
+    private volatile int ultimoTamanoMensajeBytes;
 
     public EmisorPartida(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -61,9 +63,16 @@ public class EmisorPartida {
         sesiones.clear();
     }
 
+    /** Tamanio UTF-8 del ultimo mensaje serializado, para diagnostico de red (F7). */
+    public int getUltimoTamanoMensajeBytes() {
+        return ultimoTamanoMensajeBytes;
+    }
+
     private String serializar(Object mensaje) {
         try {
-            return objectMapper.writeValueAsString(mensaje);
+            String json = objectMapper.writeValueAsString(mensaje);
+            ultimoTamanoMensajeBytes = json.getBytes(StandardCharsets.UTF_8).length;
+            return json;
         } catch (JacksonException e) {
             log.error("No se pudo serializar el mensaje {}: {}", mensaje.getClass().getSimpleName(), e.getMessage());
             return null;

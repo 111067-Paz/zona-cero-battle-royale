@@ -14,6 +14,7 @@ export interface JugadorVisual {
   estadoVida: EstadoVida;
   conectado: boolean;
   personaje: Personaje;
+  arma: string;
 }
 
 export interface ProyectilVisual {

@@ -145,15 +145,26 @@ Al terminar trabajo significativo: `mem_save` con lo aprendido (obligatorio, no 
   Gotchas Boot 4 nuevos: `write-dates-as-timestamps` ya no existe como `SerializationFeature` de Jackson 3
   (romper el binding); `FlywayAutoConfiguration` se movió a `spring-boot-flyway` (módulo separado, igual
   que Jackson) — sin él, Flyway nunca corre y ninguna tabla se crea, sin error de arranque.
-- [ ] **Fase 6 — Multijugador real** *(código + 138 tests BE verdes; falta DoD manual del humano)*
-  DoD: dos navegadores, dos cuentas, misma partida; estadísticas de ambos persistidas.
+- [x] **Fase 6 — Multijugador real** *(código + 138 tests BE verdes; DoD manual validado 2026-07-18)*
+  DoD validado: dos navegadores, dos cuentas, misma partida; ambos jugadores se ven, se disparan,
+  uno gana y las estadísticas de ambos quedan persistidas.
   **REGLA DE LA FASE: `juego/dominio` NO SE TOCA** — verificado (único diff en `Partida.java` es
   `ordenEliminacion`, de Fase 5). Implementado: `ActorMatchmaking` (un hilo, cola+dedup+timeout→bots,
   R6), `GestorPartidas` multi-partida real + sweep de higiene (R12, `graciaCumplida()` ya consumido),
   ticket con `idPartida`, `HandlerPartida` resuelve loop por sesión, frontend PLAY→cola→polling
   "n/10"→`/partida?idPartida=`. Test de higiene: 50 partidas creadas y terminadas → cero residuos, verde.
-- [ ] **Fase 7 — Calidad de red** (prediction + reconciliación con sec/acks; jugable con 150 ms)
-- [ ] **Fase 8 — Renderer isométrico** (cero cambios fuera de `render/` — prueba del Bridge)
+- [x] **Fase 7 — Calidad de red** *(cerrada 2026-07-19)*
+  DoD validado: jugable con 150 ms simulados sin goma en el movimiento propio. Implementado: client
+  prediction de la física en Angular y reconciliación de inputs no confirmados usando acks. Agregado:
+  indicadores de calidad de red en el HUD (PING y SIZE en bytes de la snapshot) e inyección de
+  `ConexionPartidaService`. Integrado: `EventoImpacto` emitido en backend (`Partida.aplicarImpacto()`) y
+  despachado como `"IMPACTO"` para dibujar daño flotante instantáneo en el cliente, removiendo el
+  diff diferido de HP.
+- [x] **Fase 8 — Renderer isométrico** *(cerrada 2026-07-19)*
+  DoD validado: cambio top-down ↔ isométrico ↔ 3D en caliente en la misma partida sin perder inputs.
+  Implementado: visual Bridge `RendererJuego` con tres renderers autónomos. El modo isométrico realiza
+  depth-sorting vertical en base a la coordenada diagonal y el modo 3D (Three.js) limpia recursos
+  WebGL y fuerza context loss para evitar leaks de memoria. Preferencia guardada en localStorage.
 
 **Antes de marcar una fase como cerrada:** tests verdes (BE y FE) + casos borde de la fase con test
 o decisión documentada + DoD validado a mano por el humano + `mem_save` del cierre.

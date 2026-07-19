@@ -818,3 +818,81 @@ Revisión adversarial de la v2 + cruce contra la propuesta3. Cada fila es un bug
 ---
 
 *Próximo paso: OK explícito a este plan v3 (o correcciones) → scaffolding de la Fase 0 (comandos en §10-Fase 0, los corre el humano) → diseño fino y código de la Fase 0.*
+
+---
+
+## 17. Propuesta visual: mundo cartoon coherente en 2D e identidad 3D
+
+**Estado: PROPUESTA.** Esta sección fija el objetivo visual de las referencias entregadas el 2026-07-17; no autoriza código ni altera la secuencia de fases. La integración espera el DoD manual de Fase 6 y la Fase 7. El arte puede producirse en paralelo sin tocar el juego.
+
+### 17.1 Decisión de dirección artística
+
+Las referencias tienen tres roles distintos y se complementan, no se copian literalmente:
+
+| Referencia | Rol que se adopta | Decisión concreta |
+|---|---|---|
+| Captura 3D (aventurero) | Cámara en tercera persona, proporciones chibi, luz suave, sombra de contacto y lectura clara del personaje | Los personajes siguen siendo el roster animal del juego; no se reemplazan por un humano genérico. |
+| Captura 2D de césped/cajones | Materiales cálidos, vegetación agrupada y cajas legibles como cobertura | Cada AABB existente se dibuja como un prop cartoon con contorno/sombra; no se agregan colisiones nuevas. |
+| Cartas de Battle Kat/Dino/Robo/Shadow/Sparkle | Identidad del roster, paleta saturada, borde grueso y estados de selección | El retrato debe ser un recorte con transparencia sobre una tarjeta CSS, no un PNG cuadrado blanco incrustado. |
+
+**Resultado buscado:** "Zona Cero" es un battle royale cartoon de animales aventureros. Top-down, isométrico y 3D muestran exactamente la misma partida y el mismo personaje; sólo cambia la proyección.
+
+### 17.2 Límites no negociables
+
+- La simulación sigue siendo 2D, determinista y autoritativa en Java. El 3D es una cámara y una representación del plano `x/y`; no agrega eje `z`, saltos, pisos ni daño vertical.
+- `RendererJuego` sigue consumiendo `EstadoVisual`. No conoce WebSocket, store, Angular ni lógica de juego.
+- Personajes son cosméticos: no tienen estadísticas, velocidad, HP, economía, niveles ni armas inventadas.
+- El catálogo visual sólo puede mostrar armas que existan en `TipoArma` y en el snapshot. Hoy: `PISTOLA`, `ESCOPETA` y `RIFLE`.
+- Cajas, árboles, rocas y carpas nuevos son sólo decorativos si no existen ya en el mapa. Añadir cobertura física exige una propuesta de mapa/dominio separada.
+
+### 17.3 Plan por carriles
+
+#### Carril A — Producción de arte (puede comenzar ahora, no bloquea fases)
+
+1. Crear una ficha por personaje: silueta, paleta, accesorio distintivo y arma compatible. Mantener el nombre/ID actual (`GATO`, `DINO`, `ROBO_PERRO`, `CONEJO`, `ARDILLA`).
+2. Exportar retratos con **fondo transparente** (WebP/PNG RGBA), sin tarjeta ni texto horneado. La tarjeta aplica en CSS estados normal, seleccionado, bloqueado y `READY`.
+3. Preparar props 2D: césped en parches, flores, arbustos, cajón de madera, roca, árbol y tienda. Cada prop tiene sombra de contacto y contorno oscuro consistente con los tokens de §15.
+4. Para 3D elegir una de dos rutas antes de integrar:
+   - **Recomendada — modelos GLB low-poly/toon con esqueleto compartido:** mejor silueta, animación y calidad de referencia; requiere pipeline de Blender/exportación y control de peso de assets.
+   - **Temporal — geometría Three.js procedimental:** rápida y sin pipeline de arte, pero no alcanza la expresividad de la referencia y se vuelve difícil de mantener al crecer el roster.
+
+#### Carril B — Fase 8: renderer de juego (después de Fase 7)
+
+1. Centralizar una tabla visual cliente `Personaje -> retrato, paleta, modelo/sprite` y reutilizarla en los tres renderers. El fallback debe ser la silueta actual, nunca un personaje invisible.
+2. Top-down/isométrico: usar capas de suelo, props y entidades; hacer depth-sort por base `y` para que el jugador pase correctamente por delante/detrás de cajones y vegetación.
+3. 3D: cámara orbital de tercera persona de 35–45°, seguimiento suave, límite de pitch, niebla/luz ambiental toon y sombras de contacto. El apuntado se traduce al mismo ángulo 2D autoritativo; la cámara no crea física nueva.
+4. Cargar mapas y assets de forma asíncrona en `iniciar()`; ante un fallo de WebGL o asset, degradar a top-down sin cortar la partida.
+5. Mantener el toggle top-down ↔ isométrico ↔ 3D en caliente y persistido; no cambiar un mensaje del protocolo ni reiniciar el socket.
+
+#### Carril C — UI de cartas y lobby (propuesta posterior a Fase 8)
+
+La tarjeta de personajes de la referencia no pertenece a Fase 8: vive fuera de `render/`. Se agenda como propuesta cosmética independiente antes de modificar el orden hacia producción. Incluye `PersonajeRetratoComponent`, selección accesible, estados de foco/selección y sustitución de los fondos blancos actuales por recortes transparentes.
+
+### 17.4 Archivos/fronteras previstas
+
+| Área | Responsabilidad | Regla |
+|---|---|---|
+| `client/public/personajes/` | Retratos transparentes del roster | No contener marcos, texto ni estados UI. |
+| `client/public/render/2d/` | Atlas de terreno/props | No contiene datos de colisión. |
+| `client/public/render/3d/` | GLB/texturas optimizados | Un modelo mapea a un `Personaje` existente. |
+| `client/src/app/features/partida/render/` | Proyección, capas, asset loading, fallback y limpieza WebGL | No importar conexión ni store. |
+| `client/src/app/shared/personaje-retrato.component.ts` | Retrato semántico reutilizable y fallback | Sólo se toca en el carril C, no en Fase 8. |
+| `server/.../TipoArma.java` y protocolo | Catálogo autoritativo de armas | No se toca por una mejora exclusivamente visual. |
+
+### 17.5 Criterios de aceptación visual
+
+- [ ] El mismo snapshot produce posiciones y HP idénticos en los tres modos de render.
+- [ ] El jugador puede cambiar de vista en una partida sin reconectar ni perder inputs.
+- [ ] Los personajes se reconocen por silueta y color desde la cámara normal; muerto sigue teniendo lectura gris.
+- [ ] No quedan fondos blancos rectangulares detrás de los retratos de las cartas.
+- [ ] Cajas/vegetación tienen orden de profundidad correcto y no aparentan ser obstáculos si no lo son.
+- [ ] Fallback a top-down funciona cuando WebGL o un asset 3D falla.
+- [ ] DoD manual: la imagen final conserva el estilo cartoon consistente entre lobby, HUD, mapa 2D y vista 3D.
+
+### 17.6 Orden real de trabajo
+
+1. Cerrar manualmente Fase 6: dos cuentas, misma partida y estadísticas persistidas.
+2. Implementar y validar Fase 7 bajo TDD estricto.
+3. Revisar/aprobar esta propuesta y presentar el diseño fino de Fase 8.
+4. Integrar Carril B por slices revisables. El carril A puede alimentar assets, pero no modifica la simulación.
+5. Crear una propuesta separada para Carril C antes de tocar lobby/compartidos.

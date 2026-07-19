@@ -10,13 +10,35 @@ import ar.pazluciano.battleroyale.juego.dominio.partida.Vector2;
  */
 public class BuscarZona implements EstadoComportamiento {
 
+    private static final double DISTANCIA_EXPLORACION = 8.0;
+    private static final double[] ANGULOS_ESCAPE = { Math.PI / 4.0, -Math.PI / 4.0, Math.PI / 2.0, -Math.PI / 2.0 };
+
     @Override
     public EstadoComportamiento actuar(ContextoBot contexto, RepertorioEstados estados) {
         if (!contexto.estaFueraDeZona()) {
             return estados.merodeando();
         }
-        Vector2 direccion = contexto.direccionHaciaZona();
+        Vector2 direccion = direccionDeEscape(contexto);
         contexto.aplicarIntencion(direccion, Math.atan2(direccion.getY(), direccion.getX()), false);
         return this;
+    }
+
+    private Vector2 direccionDeEscape(ContextoBot contexto) {
+        Vector2 directa = contexto.direccionHaciaZona();
+        Vector2 origen = contexto.getJugador().getPosicion();
+        Vector2 centro = contexto.getMundo().centroZona();
+        if (contexto.getMundo().hayLineaDeVista(origen, centro)) {
+            return directa;
+        }
+        double angulo = Math.atan2(directa.getY(), directa.getX());
+        for (double delta : ANGULOS_ESCAPE) {
+            double candidatoAngulo = angulo + delta;
+            Vector2 candidato = new Vector2(Math.cos(candidatoAngulo), Math.sin(candidatoAngulo));
+            Vector2 puntoExploracion = origen.sumar(candidato.escalar(DISTANCIA_EXPLORACION));
+            if (contexto.getMundo().hayLineaDeVista(origen, puntoExploracion)) {
+                return candidato;
+            }
+        }
+        return directa;
     }
 }

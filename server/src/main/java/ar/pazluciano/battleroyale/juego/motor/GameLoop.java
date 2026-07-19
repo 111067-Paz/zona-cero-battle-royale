@@ -6,6 +6,7 @@ import ar.pazluciano.battleroyale.juego.dominio.partida.EventoFinPartida;
 import ar.pazluciano.battleroyale.juego.dominio.partida.EventoKill;
 import ar.pazluciano.battleroyale.juego.dominio.partida.EventoMuerteZona;
 import ar.pazluciano.battleroyale.juego.dominio.partida.EventoRecogido;
+import ar.pazluciano.battleroyale.juego.dominio.partida.EventoImpacto;
 import ar.pazluciano.battleroyale.juego.dominio.partida.EstadoVida;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Jugador;
 import ar.pazluciano.battleroyale.juego.dominio.partida.Partida;
@@ -55,6 +56,7 @@ public class GameLoop {
     private final EmisorPartida emisor;
     private final EnsambladorSnapshot ensamblador;
     private final ApplicationEventPublisher publicadorEventos;
+    private final MetricasLoop metricas = new MetricasLoop();
     private final Queue<Comando> cola = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService executor;
 
@@ -100,6 +102,11 @@ public class GameLoop {
         return partida.getId();
     }
 
+    /** Metricas de diagnostico del loop; no forman parte del estado de la partida. */
+    public MetricasLoop getMetricas() {
+        return metricas;
+    }
+
     /** True cuando la gracia de FIN_PARTIDA se cumplio: el GestorPartidas puede desregistrar (R12). */
     public boolean graciaCumplida() {
         return partida.graciaCumplida();
@@ -134,11 +141,17 @@ public class GameLoop {
     }
 
     private void ejecutarUnTick() {
-        procesarComandos();
-        partida.avanzarTick();
-        if (partida.getTick() % config.ticksPorSnapshot() == 0) {
-            emisor.emitir(ensamblador.desde(partida));
-            emitirEventos();
+        long inicioNanos = System.nanoTime();
+        try {
+            procesarComandos();
+            partida.avanzarTick();
+            if (partida.getTick() % config.ticksPorSnapshot() == 0) {
+                emisor.emitir(ensamblador.desde(partida));
+                metricas.registrarSnapshot(emisor.getUltimoTamanoMensajeBytes());
+                emitirEventos();
+            }
+        } finally {
+            metricas.registrarTick(System.nanoTime() - inicioNanos);
         }
     }
 
@@ -210,6 +223,14 @@ public class GameLoop {
             case EventoMuerteZona muerteZona -> Evento.builder()
                     .evento("MUERTE_ZONA")
                     .datos(Map.of("victima", muerteZona.getIdVictima()))
+                    .build();
+            case EventoImpacto impacto -> Evento.builder()
+                    .evento("IMPACTO")
+                    .datos(Map.of(
+                            "victima", impacto.getIdVictima(),
+                            "dano", String.valueOf(impacto.getDano()),
+                            "x", String.valueOf(impacto.getX()),
+                            "y", String.valueOf(impacto.getY())))
                     .build();
             case EventoFinPartida finPartida -> aEventoFinPartida(finPartida.getResultado());
         };

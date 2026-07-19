@@ -155,3 +155,4 @@ function dibujarOrejaLarga(g: Graphics, cx: number, cy: number, r: number, angul
     .fill(color)
     .stroke({ width: GROSOR_DETALLE, color: COLOR_BORDE });
 }
+
