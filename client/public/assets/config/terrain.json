@@ -1,0 +1,11 @@
+{
+  "chunkSize": 64,
+  "segments": 32,
+  "materials": {
+    "cesped": {
+      "albedoMap": "assets/textures/cesped_albedo.jpg",
+      "roughness": 0.85,
+      "metalness": 0.05
+    }
+  }
+}

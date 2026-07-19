@@ -11,6 +11,11 @@ import java.util.Optional;
  * entre los dos modulos.
  */
 public enum Personaje {
+    BARBARROJA,
+    PIRATA_ANNE,
+    PIRATA_HENRY,
+    ESQUELETO,
+    TIBURON,
     GATO,
     DINO,
     ROBO_PERRO,

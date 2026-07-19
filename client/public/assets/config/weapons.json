@@ -1,0 +1,51 @@
+{
+  "pistola": {
+    "model": "assets/weapons/Weapon_Pistol.gltf",
+    "socket": "RightHand",
+    "scale": 0.4,
+    "offset": [0, 0, 0],
+    "rotation": [0, 0, 0]
+  },
+  "escopeta": {
+    "model": "assets/weapons/Weapon_DoubleShotgun.gltf",
+    "socket": "RightHand",
+    "scale": 0.4,
+    "offset": [0, 0, 0],
+    "rotation": [0, 0, 0]
+  },
+  "rifle": {
+    "model": "assets/weapons/Weapon_Rifle.gltf",
+    "socket": "RightHand",
+    "scale": 0.4,
+    "offset": [0, 0, 0],
+    "rotation": [0, 0, 0]
+  },
+  "sniper": {
+    "model": "assets/weapons/Weapon_AxeRifle.gltf",
+    "socket": "RightHand",
+    "scale": 0.4,
+    "offset": [0, 0, 0],
+    "rotation": [0, 0, 0]
+  },
+  "subfusil": {
+    "model": "assets/weapons/Weapon_Pistol.gltf",
+    "socket": "RightHand",
+    "scale": 0.35,
+    "offset": [0, 0, 0],
+    "rotation": [0, 0, 0]
+  },
+  "revolver": {
+    "model": "assets/weapons/Weapon_Pistol.gltf",
+    "socket": "RightHand",
+    "scale": 0.35,
+    "offset": [0, 0, 0],
+    "rotation": [0, 0, 0]
+  },
+  "cuchillo": {
+    "model": "assets/weapons/Weapon_Cutlass.gltf",
+    "socket": "RightHand",
+    "scale": 0.4,
+    "offset": [0, 0, 0],
+    "rotation": [0, 0, 0]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "skyColor": "0xbae6fd",
+  "groundColor": "0x3f6212",
+  "hemisphereIntensity": 0.75,
+  "ambientColor": "0xe0f2fe",
+  "ambientIntensity": 0.45,
+  "directionalColor": "0xfff7ed",
+  "directionalIntensity": 1.4,
+  "directionalPosition": [-25, 45, 25]
+}

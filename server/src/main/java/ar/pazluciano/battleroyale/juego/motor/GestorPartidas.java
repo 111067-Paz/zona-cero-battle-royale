@@ -110,11 +110,17 @@ public class GestorPartidas {
     private void agregarBots(Partida partida, int cantidadBots, EnsambladorSnapshot ensamblador) {
         List<FabricaParticipante> arquetipos = List.of(
                 new FabricaAsaltante(), new FabricaFrancotirador(), new FabricaExplorador());
-        Personaje[] personajes = Personaje.values();
+        List<Personaje> personajesPirata = List.of(
+                Personaje.BARBARROJA,
+                Personaje.PIRATA_ANNE,
+                Personaje.PIRATA_HENRY,
+                Personaje.ESQUELETO,
+                Personaje.TIBURON
+        );
         for (int i = 0; i < cantidadBots; i++) {
             String idBot = "bot-" + i;
             partida.agregarParticipante(idBot, arquetipos.get(i % arquetipos.size()));
-            ensamblador.registrarPersonaje(idBot, personajes[i % personajes.length]);
+            ensamblador.registrarPersonaje(idBot, personajesPirata.get(i % personajesPirata.size()));
         }
     }
 

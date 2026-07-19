@@ -1,0 +1,24 @@
+# Archivos de Descargas y Paquetes de Assets
+*.zip
+*.rar
+*.7z
+*.blend
+Ultimate Stylized Nature*
+Animated FPS Guns*
+Pirate Kit*
+
+# IDE y Sistema
+.idea/
+.vscode/
+.DS_Store
+*.log
+tmp/
+
+# Backend Spring Boot
+server/target/
+server/.mvn/wrapper/maven-wrapper.jar
+
+# Frontend Angular
+client/dist/
+client/node_modules/
+client/.angular/

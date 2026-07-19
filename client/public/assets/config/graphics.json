@@ -1,0 +1,8 @@
+{
+  "shadowMapType": "PCFShadowMap",
+  "shadowMapResolution": 2048,
+  "toneMapping": "ACESFilmicToneMapping",
+  "toneMappingExposure": 1.25,
+  "outputColorSpace": "SRGBColorSpace",
+  "pixelRatioMax": 2
+}

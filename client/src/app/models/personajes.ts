@@ -4,7 +4,17 @@
  * unica defensa anti-drift del lado TS (el fixture de contrato cubre el lado Java).
  */
 
-export type Personaje = 'GATO' | 'DINO' | 'ROBO_PERRO' | 'CONEJO' | 'ARDILLA';
+export type Personaje =
+  | 'BARBARROJA'
+  | 'PIRATA_ANNE'
+  | 'PIRATA_HENRY'
+  | 'ESQUELETO'
+  | 'TIBURON'
+  | 'GATO'
+  | 'DINO'
+  | 'ROBO_PERRO'
+  | 'CONEJO'
+  | 'ARDILLA';
 
 export interface EspecificacionPersonaje {
   id: Personaje;
@@ -19,11 +29,18 @@ export interface EspecificacionPersonaje {
 }
 
 export const PERSONAJES: Record<Personaje, EspecificacionPersonaje> = {
-  GATO: { id: 'GATO', nombre: 'Battle Kat', slug: 'gato', colorCuerpo: 0xf4a341, colorDetalle: 0xfff3e0 },
-  DINO: { id: 'DINO', nombre: 'Dino Dude', slug: 'dino', colorCuerpo: 0x4caf50, colorDetalle: 0xc8e6a0 },
-  ROBO_PERRO: { id: 'ROBO_PERRO', nombre: 'Robo Pup', slug: 'robo-perro', colorCuerpo: 0x9e9e9e, colorDetalle: 0x64d8e8 },
-  CONEJO: { id: 'CONEJO', nombre: 'Sparkle Bunny', slug: 'conejo', colorCuerpo: 0xf5f5f5, colorDetalle: 0xffc1cc },
-  ARDILLA: { id: 'ARDILLA', nombre: 'Shadow Squirrel', slug: 'ardilla', colorCuerpo: 0x8d5a2b, colorDetalle: 0xd7a86e },
+  BARBARROJA: { id: 'BARBARROJA', nombre: 'Capitán Barbarroja', slug: 'barbarroja', colorCuerpo: 0xd97706, colorDetalle: 0xfef3c7 },
+  PIRATA_ANNE: { id: 'PIRATA_ANNE', nombre: 'Pirata Anne', slug: 'pirata_anne', colorCuerpo: 0xec4899, colorDetalle: 0xfce7f3 },
+  PIRATA_HENRY: { id: 'PIRATA_HENRY', nombre: 'Pirata Henry', slug: 'pirata_henry', colorCuerpo: 0x3b82f6, colorDetalle: 0xdbeafe },
+  ESQUELETO: { id: 'ESQUELETO', nombre: 'Esqueleto Pirata', slug: 'esqueleto', colorCuerpo: 0x94a3b8, colorDetalle: 0xf1f5f9 },
+  TIBURON: { id: 'TIBURON', nombre: 'Tiburón Pirata', slug: 'tiburon', colorCuerpo: 0x06b6d4, colorDetalle: 0xcffafe },
+
+  // Compatibilidad legacy
+  GATO: { id: 'GATO', nombre: 'Capitán Barbarroja', slug: 'barbarroja', colorCuerpo: 0xd97706, colorDetalle: 0xfef3c7 },
+  DINO: { id: 'DINO', nombre: 'Pirata Anne', slug: 'pirata_anne', colorCuerpo: 0xec4899, colorDetalle: 0xfce7f3 },
+  ROBO_PERRO: { id: 'ROBO_PERRO', nombre: 'Pirata Henry', slug: 'pirata_henry', colorCuerpo: 0x3b82f6, colorDetalle: 0xdbeafe },
+  CONEJO: { id: 'CONEJO', nombre: 'Esqueleto Pirata', slug: 'esqueleto', colorCuerpo: 0x94a3b8, colorDetalle: 0xf1f5f9 },
+  ARDILLA: { id: 'ARDILLA', nombre: 'Tiburón Pirata', slug: 'tiburon', colorCuerpo: 0x06b6d4, colorDetalle: 0xcffafe },
 };
 
 /**
@@ -34,9 +51,15 @@ export function rutaRetrato(personaje: Personaje | string | null | undefined): s
   return `/personajes/${especificacionDe(personaje).slug}.png`;
 }
 
-export const LISTA_PERSONAJES: readonly Personaje[] = ['GATO', 'DINO', 'ROBO_PERRO', 'CONEJO', 'ARDILLA'];
+export const LISTA_PERSONAJES: readonly Personaje[] = [
+  'BARBARROJA',
+  'PIRATA_ANNE',
+  'PIRATA_HENRY',
+  'ESQUELETO',
+  'TIBURON',
+];
 
-const PERSONAJE_POR_DEFECTO: Personaje = 'GATO';
+const PERSONAJE_POR_DEFECTO: Personaje = 'BARBARROJA';
 
 /** Fallback GATO para sesiones pre-deploy (localStorage sin `personaje`) o texto invalido. */
 export function especificacionDe(personaje: Personaje | string | null | undefined): EspecificacionPersonaje {

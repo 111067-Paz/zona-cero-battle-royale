@@ -1,0 +1,63 @@
+{
+  "barbarroja": {
+    "model": "assets/characters/Characters_Captain_Barbarossa.gltf",
+    "name": "Capitán Barbarroja",
+    "scale": 1.2,
+    "speed": 6.0,
+    "hp": 100,
+    "animations": {
+      "idle": "Idle",
+      "walk": "Walk",
+      "run": "Run",
+      "shoot": "Shoot"
+    }
+  },
+  "pirata_anne": {
+    "model": "assets/characters/Characters_Anne.gltf",
+    "name": "Pirata Anne",
+    "scale": 1.2,
+    "speed": 6.5,
+    "hp": 100,
+    "animations": {
+      "idle": "Idle",
+      "walk": "Walk",
+      "run": "Run"
+    }
+  },
+  "pirata_henry": {
+    "model": "assets/characters/Characters_Henry.gltf",
+    "name": "Pirata Henry",
+    "scale": 1.2,
+    "speed": 6.0,
+    "hp": 100,
+    "animations": {
+      "idle": "Idle",
+      "walk": "Walk",
+      "run": "Run"
+    }
+  },
+  "esqueleto": {
+    "model": "assets/characters/Characters_Skeleton.gltf",
+    "name": "Esqueleto Pirata",
+    "scale": 1.2,
+    "speed": 6.2,
+    "hp": 100,
+    "animations": {
+      "idle": "Idle",
+      "walk": "Walk",
+      "run": "Run"
+    }
+  },
+  "tiburon": {
+    "model": "assets/characters/Characters_Sharky.gltf",
+    "name": "Tiburón Pirata",
+    "scale": 1.2,
+    "speed": 6.0,
+    "hp": 100,
+    "animations": {
+      "idle": "Idle",
+      "walk": "Walk",
+      "run": "Run"
+    }
+  }
+}

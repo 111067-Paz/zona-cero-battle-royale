@@ -361,11 +361,16 @@ interface MisionDecorativa {
 })
 export class LobbyPage {
   protected readonly COLORES_CSS: Record<Personaje, string> = {
-    GATO: '#4ade80',       // Verde neón
-    ARDILLA: '#c084fc',    // Morado neón
-    DINO: '#38bdf8',       // Azul neón
-    ROBO_PERRO: '#22d3ee', // Cian neón
-    CONEJO: '#f472b6',     // Rosa neón
+    BARBARROJA: '#d97706',
+    PIRATA_ANNE: '#ec4899',
+    PIRATA_HENRY: '#3b82f6',
+    ESQUELETO: '#94a3b8',
+    TIBURON: '#06b6d4',
+    GATO: '#d97706',
+    ARDILLA: '#06b6d4',
+    DINO: '#ec4899',
+    ROBO_PERRO: '#3b82f6',
+    CONEJO: '#94a3b8',
   };
 
   /** DECORATIVO: sin backend — valores fijos de ambientacion (mockup "Matchmaking Lobby"). */
@@ -378,11 +383,16 @@ export class LobbyPage {
     { texto: 'Mejor racha de victorias', hecha: false },
   ];
   protected readonly XP_DECORATIVO: Record<Personaje, number> = {
-    GATO: 6500,
-    ARDILLA: 7200,
-    DINO: 5800,
-    ROBO_PERRO: 6100,
-    CONEJO: 6900,
+    BARBARROJA: 8500,
+    PIRATA_ANNE: 7200,
+    PIRATA_HENRY: 6800,
+    ESQUELETO: 9100,
+    TIBURON: 7900,
+    GATO: 8500,
+    ARDILLA: 7900,
+    DINO: 7200,
+    ROBO_PERRO: 6800,
+    CONEJO: 9100,
   };
 
   protected readonly authService = inject(AuthService);
@@ -402,7 +412,7 @@ export class LobbyPage {
   protected readonly personajes = LISTA_PERSONAJES;
   protected readonly cambiandoPersonaje = signal(false);
   protected readonly errorPersonaje = signal<string | null>(null);
-  protected readonly personajeActual = () => this.authService.usuarioActual()?.personaje ?? 'GATO';
+  protected readonly personajeActual = () => this.authService.usuarioActual()?.personaje ?? 'BARBARROJA';
 
   private suscripcionPolling: Subscription | null = null;
 

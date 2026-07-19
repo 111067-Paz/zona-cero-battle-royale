@@ -129,12 +129,15 @@ function dibujarRasgoFrontal(
       return;
     }
     case 'ARDILLA':
-      // La cola ya se dibujo detras del cuerpo; sin rasgo frontal adicional.
+    case 'BARBARROJA':
+    case 'PIRATA_ANNE':
+    case 'PIRATA_HENRY':
+    case 'ESQUELETO':
+    case 'TIBURON':
+      // La personalización visual se renderiza en 3D vía Three.js / GLB.
       return;
-    default: {
-      const exhaustivo: never = personaje;
-      throw new Error(`Personaje sin dibujo: ${exhaustivo}`);
-    }
+    default:
+      return;
   }
 }
 

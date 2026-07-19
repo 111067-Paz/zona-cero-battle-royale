@@ -125,6 +125,14 @@ import { especificacionDe, hexCss, Personaje, rutaRetrato } from '../models/pers
           <circle cx="38.2" cy="32.8" r="1.1" fill="#ffffff" />
           <ellipse cx="30" cy="40" rx="1.6" ry="1.2" fill="#111424" opacity="0.6" />
         }
+        @default {
+          <circle cx="32" cy="36" r="22" [attr.fill]="'url(#grad-' + idInstancia + ')'" stroke="#111424" stroke-width="3" />
+          <circle cx="24" cy="32" r="3.4" fill="#111424" />
+          <circle cx="40" cy="32" r="3.4" fill="#111424" />
+          <circle cx="25.2" cy="30.8" r="1.1" fill="#ffffff" />
+          <circle cx="41.2" cy="30.8" r="1.1" fill="#ffffff" />
+          <path d="M28 42 Q32 46 36 42" stroke="#111424" stroke-width="2" fill="none" stroke-linecap="round" />
+        }
       }
     </svg>
     }
@@ -140,7 +148,7 @@ export class PersonajeRetratoComponent {
   protected readonly idInstancia = `pr${PersonajeRetratoComponent.contadorInstancias++}`;
 
   /** Se resetea solo al cambiar el personaje (el podio reusa la instancia con otro personaje). */
-  protected readonly imagenFallo = linkedSignal({ source: this.personaje, computation: () => false });
+  protected readonly imagenFallo = linkedSignal({ source: this.personaje, computation: () => true });
   protected readonly ruta = computed(() => rutaRetrato(this.personaje()));
   protected readonly nombre = computed(() => especificacionDe(this.personaje()).nombre);
   protected readonly colorCuerpo = computed(() => hexCss(especificacionDe(this.personaje()).colorCuerpo));

@@ -11,7 +11,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   MeshToonMaterial,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
   RingGeometry,
@@ -29,6 +29,7 @@ import { ALTURA_CUERPO_CHIBI, ChibiRig, construirChibi, faseDesdeId, RADIO_CABEZ
 import { construirMundo3D, Mundo3D } from './mundo-3d';
 import { aVector3, crearGradienteToon, crearSpriteCanvas, direccionDesdeAngulo, SpriteCanvas } from './utiles-3d';
 import { construirZona3D, Zona3D } from './zona-3d';
+import { AssetManager } from './managers/asset-manager';
 
 const COLOR_CIELO = 0xbae6fd;
 const COLOR_CESPED = 0x82c341;
@@ -106,13 +107,16 @@ export class RendererTresD implements RendererJuego {
 
   private pitch = 0.6; // Ángulo vertical inicial (~34 grados)
   private alMoverMouse: ((e: MouseEvent) => void) | null = null;
+  private ultimoFrameMs = performance.now();
 
   async iniciar(canvas: HTMLCanvasElement): Promise<void> {
     this.canvas = canvas;
+    await AssetManager.getInstancia().precargarAssetsBasicos();
+
     const renderer = new WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = PCFSoftShadowMap;
+    renderer.shadowMap.type = PCFShadowMap;
     renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.25;
 
@@ -215,8 +219,11 @@ export class RendererTresD implements RendererJuego {
       return; // no iniciado o ya destruido: no-op seguro (el rAF de partida.component sigue vivo durante el swap)
     }
     const ahoraMs = performance.now();
+    const deltaSec = (ahoraMs - this.ultimoFrameMs) / 1000;
+    this.ultimoFrameMs = ahoraMs;
+
     this.zona?.actualizar(estado.zona);
-    this.actualizarJugadores(estado.jugadores, idJugadorPropio, ahoraMs);
+    this.actualizarJugadores(estado.jugadores, idJugadorPropio, ahoraMs, deltaSec);
     this.actualizarProyectiles(estado.proyectiles);
     this.actualizarBotines(estado.botines, ahoraMs);
     this.actualizarNumerosDanio(estado.numerosDanio);
@@ -226,7 +233,7 @@ export class RendererTresD implements RendererJuego {
   }
 
   /** Diffing con retencion (Decision #7): crea/actualiza/quita rigs de chibi segun el snapshot, nunca reconstruye por frame. */
-  private actualizarJugadores(jugadores: readonly JugadorVisual[], idPropio: string | null, ahoraMs: number): void {
+  private actualizarJugadores(jugadores: readonly JugadorVisual[], idPropio: string | null, ahoraMs: number, deltaSec: number): void {
     if (this.scene === null) {
       return;
     }
@@ -240,6 +247,7 @@ export class RendererTresD implements RendererJuego {
         this.scene.add(entidad.rig.raiz);
       }
       this.actualizarEntidadJugador(entidad, jugador, jugador.id === idPropio, ahoraMs);
+      entidad.rig.playerPrefab.actualizarAnimacion(deltaSec);
     }
     for (const [id, entidad] of this.jugadores) {
       if (!vistos.has(id)) {
@@ -443,7 +451,10 @@ export class RendererTresD implements RendererJuego {
     }
     for (const agua of this.mundo.aguas) {
       const mezcla = (Math.sin(faseAgua(ahoraMs) * Math.PI * 2) + 1) / 2;
-      agua.mesh.material.color.setHex(lerpColor(agua.colorBase, agua.colorClaro, mezcla));
+      const mat = agua.mesh.material as MeshStandardMaterial;
+      if (mat.color) {
+        mat.color.setHex(lerpColor(agua.colorBase, agua.colorClaro, mezcla));
+      }
       const posiciones = agua.mesh.geometry.attributes['position'];
       for (let i = 0; i < posiciones.count; i++) {
         const vx = posiciones.getX(i);

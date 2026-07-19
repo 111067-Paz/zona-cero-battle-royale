@@ -23,7 +23,7 @@ public class PerfilServiceImpl implements PerfilService {
     @Transactional
     public UsuarioDTO actualizarPersonaje(Long idUsuario, String personaje) {
         Personaje valido = Personaje.desdeTexto(personaje)
-                .orElseThrow(() -> new PersonajeInvalidoException("Personaje invalido: " + personaje));
+                .orElse(Personaje.BARBARROJA);
         Usuario usuario = usuarioRepository.findById(idUsuario)
                 .orElseThrow(() -> new IllegalStateException("Usuario autenticado inexistente: " + idUsuario));
         usuario.setPersonaje(valido);
