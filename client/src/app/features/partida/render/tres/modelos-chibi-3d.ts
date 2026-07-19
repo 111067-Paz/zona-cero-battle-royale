@@ -1,4 +1,5 @@
-import { BoxGeometry, CanvasTexture, ConeGeometry, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshToonMaterial, Object3D, PlaneGeometry, SphereGeometry, TorusGeometry } from 'three';
+import { BoxGeometry, CanvasTexture, ConeGeometry, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, MeshToonMaterial, Object3D, PlaneGeometry, SphereGeometry, TorusGeometry } from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { PERSONAJES, Personaje } from '../../../../models/personajes';
 import { crearGradienteToon } from './utiles-3d';
 
@@ -17,7 +18,7 @@ export interface ChibiRig {
   cabeza: Object3D;
   armas: { [tipo: string]: Object3D }; // Referencias a las mallas de armas en la mano
   fase: number;
-  materiales: readonly MeshToonMaterial[];
+  materiales: readonly (MeshStandardMaterial | MeshToonMaterial)[];
   coloresOriginales: readonly number[];
 }
 
@@ -29,11 +30,10 @@ export interface ChibiRig {
  */
 export function construirChibi(personaje: Personaje): ChibiRig {
   const especificacion = PERSONAJES[personaje];
-  const gradiente = crearGradienteToon();
-  const materiales: MeshToonMaterial[] = [];
+  const materiales: MeshStandardMaterial[] = [];
 
-  const crearMaterial = (color: number): MeshToonMaterial => {
-    const material = new MeshToonMaterial({ color, gradientMap: gradiente });
+  const crearMaterial = (color: number): MeshStandardMaterial => {
+    const material = new MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.1, flatShading: true });
     materiales.push(material);
     return material;
   };
@@ -54,37 +54,47 @@ export function construirChibi(personaje: Personaje): ChibiRig {
   sombra.position.y = 0.01;
   raiz.add(sombra);
 
-  // 2. Torso (Cuerpo principal volumétrico suave)
+  // 2. Torso (Cuerpo principal Low Poly esculpido con sombras)
   const materialCuerpo = crearMaterial(especificacion.colorCuerpo);
-  const cuerpo = new Mesh(new SphereGeometry(RADIO_CUERPO, 32, 24), materialCuerpo);
+  const cuerpo = new Mesh(new SphereGeometry(RADIO_CUERPO, 14, 10), materialCuerpo);
   cuerpo.position.y = RADIO_CUERPO * 0.9;
+  cuerpo.castShadow = true;
+  cuerpo.receiveShadow = true;
   raiz.add(cuerpo);
 
-  // 3. Cabeza (Volumétrica suave)
+  // 3. Cabeza (Caricaturesca Low Poly estilizada con sombras)
   const materialCabeza = crearMaterial(especificacion.colorCuerpo);
-  const cabeza = new Mesh(new SphereGeometry(RADIO_CABEZA, 32, 24), materialCabeza);
+  const cabeza = new Mesh(new SphereGeometry(RADIO_CABEZA, 16, 12), materialCabeza);
   cabeza.position.y = RADIO_CUERPO * 1.7 + RADIO_CABEZA * 0.6;
+  cabeza.castShadow = true;
+  cabeza.receiveShadow = true;
   raiz.add(cabeza);
 
-  // 4. Extremidades articuladas (Brazos y Piernas)
-  const legGeo = new CylinderGeometry(0.06, 0.06, 0.35, 16);
+  // 4. Extremidades articuladas (Brazos y Piernas Low Poly)
+  const legGeo = new CylinderGeometry(0.06, 0.06, 0.35, 8);
   for (const signo of [-1, 1]) {
     const pierna = new Mesh(legGeo, materialCuerpo);
     pierna.position.set(signo * 0.16, -RADIO_CUERPO * 0.7, 0);
+    pierna.castShadow = true;
+    pierna.receiveShadow = true;
     cuerpo.add(pierna);
   }
 
   // Brazo izquierdo (Reposo)
-  const armGeo = new CylinderGeometry(0.05, 0.05, 0.4, 16);
+  const armGeo = new CylinderGeometry(0.05, 0.05, 0.4, 8);
   const brazoIzq = new Mesh(armGeo, materialCuerpo);
   brazoIzq.position.set(-RADIO_CUERPO * 1.25, 0.1, 0);
   brazoIzq.rotation.z = 0.2;
+  brazoIzq.castShadow = true;
+  brazoIzq.receiveShadow = true;
   cuerpo.add(brazoIzq);
 
   // Brazo derecho (Apuntado frontal)
   const brazoDer = new Mesh(armGeo, materialCuerpo);
   brazoDer.position.set(RADIO_CUERPO * 1.25, 0.1, 0.1);
   brazoDer.rotation.x = -Math.PI / 2.3; // Apunta hacia adelante
+  brazoDer.castShadow = true;
+  brazoDer.receiveShadow = true;
   cuerpo.add(brazoDer);
 
   // Mano derecha (Punto de anclaje para armas)
@@ -103,6 +113,14 @@ export function construirChibi(personaje: Personaje): ChibiRig {
   // 6. Detalles específicos por personaje
   agregarRasgosYEquipo(personaje, cuerpo, cabeza, especificacion.colorDetalle, crearMaterial);
 
+  // Activar sombras proyectadas y recibidas en todas las piezas hijas
+  raiz.traverse((child) => {
+    if (child instanceof Mesh && child !== sombra) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
   return {
     raiz,
     cuerpo,
@@ -114,7 +132,21 @@ export function construirChibi(personaje: Personaje): ChibiRig {
   };
 }
 
-function crearArmas3D(crearMaterial: (color: number) => MeshToonMaterial): { [tipo: string]: Group } {
+/** Cargador helper para importar modelos GLB externos e integrarlos en el mundo con sombras. */
+export function cargarModeloGLB(url: string, alCargar: (modelo: Group) => void): void {
+  const loader = new GLTFLoader();
+  loader.load(url, (gltf) => {
+    gltf.scene.traverse((child) => {
+      if (child instanceof Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    alCargar(gltf.scene);
+  });
+}
+
+function crearArmas3D(crearMaterial: (color: number) => MeshStandardMaterial): { [tipo: string]: Group } {
   const armas: { [tipo: string]: Group } = {};
 
   const materialMetal = crearMaterial(0xa0a5b0);
@@ -190,7 +222,7 @@ function agregarRasgosYEquipo(
   cuerpo: Mesh,
   cabeza: Mesh,
   colorDetalle: number,
-  crearMaterial: (color: number) => MeshToonMaterial,
+  crearMaterial: (color: number) => MeshStandardMaterial,
 ): void {
   const materialMetal = crearMaterial(0xa0a5b0);
   const materialNegro = crearMaterial(COLOR_OSCURO);
@@ -353,6 +385,15 @@ function agregarRasgosYEquipo(
       throw new Error(`Personaje sin modelo 3D: ${exhaustivo}`);
     }
   }
+}
+
+export function faseDesdeId(id: string): number {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash << 5) - hash + id.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash) % 1000;
 }
 
 

@@ -1,13 +1,17 @@
 import {
+  ACESFilmicToneMapping,
   AmbientLight,
   Color,
   DirectionalLight,
   DoubleSide,
   Fog,
+  HemisphereLight,
   Material,
   Mesh,
   MeshBasicMaterial,
+  MeshStandardMaterial,
   MeshToonMaterial,
+  PCFSoftShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
   RingGeometry,
@@ -107,6 +111,10 @@ export class RendererTresD implements RendererJuego {
     this.canvas = canvas;
     const renderer = new WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = PCFSoftShadowMap;
+    renderer.toneMapping = ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
 
     const scene = new Scene();
     scene.background = new Color(COLOR_CIELO);
@@ -119,17 +127,30 @@ export class RendererTresD implements RendererJuego {
     camera.position.set(0, 6, 10);
     camera.lookAt(0, 0, 0);
 
-    scene.add(new AmbientLight(0xe0f2fe, 0.85));
-    const direccional = new DirectionalLight(0xfef08a, 1.15);
-    direccional.position.set(-20, 40, 15);
+    scene.add(new AmbientLight(0xe0f2fe, 0.45));
+    scene.add(new HemisphereLight(0xbae6fd, 0x3f6212, 0.75));
+
+    const direccional = new DirectionalLight(0xfff7ed, 1.4);
+    direccional.position.set(-25, 45, 25);
+    direccional.castShadow = true;
+    direccional.shadow.mapSize.width = 2048;
+    direccional.shadow.mapSize.height = 2048;
+    direccional.shadow.camera.near = 0.5;
+    direccional.shadow.camera.far = 150;
+    direccional.shadow.camera.left = -60;
+    direccional.shadow.camera.right = 60;
+    direccional.shadow.camera.top = 60;
+    direccional.shadow.camera.bottom = -60;
+    direccional.shadow.bias = -0.0005;
     scene.add(direccional);
 
     // Suelo placeholder hasta que llegue establecerMapa() (el mapa baja por REST despues de BIENVENIDA).
     const suelo = new Mesh(
       new PlaneGeometry(256, 256),
-      new MeshToonMaterial({ color: COLOR_CESPED, gradientMap: crearGradienteToon() }),
+      new MeshStandardMaterial({ color: COLOR_CESPED, roughness: 0.8, flatShading: true }),
     );
     suelo.rotation.x = -Math.PI / 2;
+    suelo.receiveShadow = true;
     scene.add(suelo);
     this.sueloPlaceholder = suelo;
 

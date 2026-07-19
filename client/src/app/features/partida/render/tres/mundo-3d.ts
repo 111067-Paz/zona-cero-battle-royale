@@ -10,6 +10,7 @@ import {
   IcosahedronGeometry,
   Mesh,
   MeshBasicMaterial,
+  MeshStandardMaterial,
   MeshToonMaterial,
   Object3D,
   PlaneGeometry,
@@ -97,10 +98,11 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
 
   const suelo = new Mesh(
     new PlaneGeometry(mapa.ancho, mapa.alto),
-    new MeshToonMaterial({ color: COLOR_CESPED, gradientMap: gradiente }),
+    new MeshStandardMaterial({ color: COLOR_CESPED, roughness: 0.8, flatShading: true }),
   );
   suelo.rotation.x = -Math.PI / 2;
   suelo.position.copy(aVector3(mapa.ancho / 2, mapa.alto / 2));
+  suelo.receiveShadow = true;
   grupo.add(suelo);
 
   for (const decoracion of mapa.decoraciones) {
@@ -239,39 +241,42 @@ function construirArbol(rectangulo: RectanguloMapa, especificacion: Especificaci
     const semilla = semillaDeterministica(rectangulo.x + indice * 6.7, rectangulo.y + indice * 3.3);
     const radioCopa = radioCopaBase * (0.85 + semilla * 0.3);
     const alturaArbol = alturaMundo * (0.75 + 0.4 * semilla) * (cantidad > 1 ? 0.8 : 1);
-    const alturaTronco = alturaArbol * 0.4;
+    const alturaTronco = alturaArbol * 0.35;
 
     const tronco = new Mesh(
-      new CylinderGeometry(radioCopa * 0.14, radioCopa * 0.32, alturaTronco, 16),
-      new MeshToonMaterial({ color: especificacion.colorSecundario, gradientMap: gradiente }),
+      new CylinderGeometry(radioCopa * 0.16, radioCopa * 0.35, alturaTronco, 7),
+      new MeshStandardMaterial({ color: especificacion.colorSecundario, roughness: 0.9, flatShading: true }),
     );
     tronco.position.copy(aVector3(posicion.x, posicion.y, alturaTronco / 2));
+    tronco.castShadow = true;
+    tronco.receiveShadow = true;
     grupo.add(tronco);
 
     const copa = new Group();
-    const colorBase = lerpColor(especificacion.colorPrincipal, 0x000000, 0.12 * semilla);
-    const esferaBase = new Mesh(new SphereGeometry(radioCopa, 32, 24), new MeshToonMaterial({ color: colorBase, gradientMap: gradiente }));
-    esferaBase.position.y = radioCopa * 0.5;
-    copa.add(esferaBase);
+    const mat1 = new MeshStandardMaterial({ color: especificacion.colorPrincipal, roughness: 0.7, flatShading: true });
+    const mat2 = new MeshStandardMaterial({ color: lerpColor(especificacion.colorPrincipal, 0xffffff, 0.15), roughness: 0.7, flatShading: true });
+    const mat3 = new MeshStandardMaterial({ color: lerpColor(especificacion.colorPrincipal, 0xffffff, 0.3), roughness: 0.7, flatShading: true });
 
-    const desplazamiento = semillaDeterministica(posicion.x, posicion.y) - 0.5;
-    const esferaMedia = new Mesh(
-      new SphereGeometry(radioCopa * 0.72, 32, 24),
-      new MeshToonMaterial({ color: lerpColor(especificacion.colorPrincipal, 0xffffff, 0.1), gradientMap: gradiente }),
-    );
-    esferaMedia.position.set(desplazamiento * radioCopa * 0.4, radioCopa * 1.15, desplazamiento * radioCopa * 0.4);
-    copa.add(esferaMedia);
+    // Pino Low Poly facetado de 3 capas (estilo Archero / Squad Busters)
+    const capa1 = new Mesh(new ConeGeometry(radioCopa * 1.1, alturaArbol * 0.45, 7), mat1);
+    capa1.position.y = alturaArbol * 0.2;
+    capa1.castShadow = true;
+    capa1.receiveShadow = true;
+    copa.add(capa1);
 
-    if (radioCopa > 2) {
-      const esferaTope = new Mesh(
-        new SphereGeometry(radioCopa * 0.5, 32, 24),
-        new MeshToonMaterial({ color: lerpColor(especificacion.colorPrincipal, 0xffffff, 0.2), gradientMap: gradiente }),
-      );
-      esferaTope.position.y = radioCopa * 1.7;
-      copa.add(esferaTope);
-    }
+    const capa2 = new Mesh(new ConeGeometry(radioCopa * 0.85, alturaArbol * 0.4, 7), mat2);
+    capa2.position.y = alturaArbol * 0.45;
+    capa2.castShadow = true;
+    capa2.receiveShadow = true;
+    copa.add(capa2);
 
-    // El Group entero pivota en la union con el tronco: el sway de B5 rota `copa.rotation.z` ahi.
+    const capa3 = new Mesh(new ConeGeometry(radioCopa * 0.6, alturaArbol * 0.35, 7), mat3);
+    capa3.position.y = alturaArbol * 0.7;
+    capa3.castShadow = true;
+    capa3.receiveShadow = true;
+    copa.add(capa3);
+
+    // El Group entero pivota en la union con el tronco
     copa.position.copy(aVector3(posicion.x, posicion.y, alturaTronco));
     grupo.add(copa);
     copas.push(copa);
@@ -280,7 +285,7 @@ function construirArbol(rectangulo: RectanguloMapa, especificacion: Especificaci
   return { objeto: grupo, copas };
 }
 
-/** ROCA: grupo de 2-3 icosaedros facetados, deformados y rotados de forma determinista. */
+/** ROCA: grupo de 2-3 icosaedros facetados Low Poly con sombras y MeshStandardMaterial. */
 function construirRoca(rectangulo: RectanguloMapa, especificacion: EspecificacionObstaculo, gradiente: DataTexture): ResultadoObstaculo {
   const area = rectangulo.ancho * rectangulo.alto;
   const cantidad = area > 250 ? 3 : 2;
@@ -291,14 +296,18 @@ function construirRoca(rectangulo: RectanguloMapa, especificacion: Especificacio
   posiciones.forEach((posicion, indice) => {
     const semilla = semillaDeterministica(rectangulo.x + indice * 4.1, rectangulo.y + indice * 7.9);
     const radio = indice === 0 ? radioPrincipal : radioPrincipal * (0.5 + semilla * 0.2);
-    const material = new MeshToonMaterial({
+    const material = new MeshStandardMaterial({
       color: lerpColor(especificacion.colorPrincipal, especificacion.colorSecundario, semilla * 0.5),
-      gradientMap: gradiente,
+      roughness: 0.9,
+      metalness: 0.1,
+      flatShading: true,
     });
     const roca = new Mesh(icosaedroFacetado(radio), material);
     roca.scale.set(0.7 + semilla * 0.6, 0.75 * (0.7 + semilla * 0.4), 0.7 + (1 - semilla) * 0.6);
     roca.rotation.set(semilla * Math.PI, semilla * Math.PI * 2, semilla * Math.PI * 0.5);
     roca.position.copy(aVector3(posicion.x, posicion.y, (radio * roca.scale.y) / 2));
+    roca.castShadow = true;
+    roca.receiveShadow = true;
     grupo.add(roca);
   });
 
@@ -415,14 +424,16 @@ function construirDecoracion(decoracion: DecoracionMapa, gradiente: DataTexture,
         const semillaY = semillaDeterministica(decoracion.y + i * 3.7, decoracion.x + i * 6.1);
         const radio = radioBase * (0.55 + semilla * 0.25);
         const bola = new Mesh(
-          new SphereGeometry(radio, 32, 24),
-          new MeshToonMaterial({ color: i === 0 ? COLOR_ARBUSTO_CLARO : COLOR_ARBUSTO, gradientMap: gradiente }),
+          new SphereGeometry(radio, 7, 5),
+          new MeshStandardMaterial({ color: i === 0 ? COLOR_ARBUSTO_CLARO : COLOR_ARBUSTO, roughness: 0.8, flatShading: true }),
         );
         bola.position.copy(aVector3(
           decoracion.x + decoracion.ancho / 2 + (semilla - 0.5) * radioBase,
           decoracion.y + decoracion.alto / 2 + (semillaY - 0.5) * radioBase,
           radio * 0.7,
         ));
+        bola.castShadow = true;
+        bola.receiveShadow = true;
         grupo.add(bola);
       }
       return grupo;
