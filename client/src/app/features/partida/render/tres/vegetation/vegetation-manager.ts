@@ -9,7 +9,7 @@ export class VegetationManager {
     if (transformaciones.length === 0) return;
 
     const assetMgr = AssetManager.getInstancia();
-    const modeloClonado = assetMgr.obtenerModeloEntorno(tipo);
+    const modeloClonado = assetMgr.models.clonarModelo(tipo) ?? assetMgr.obtenerModeloEntorno(tipo);
 
     // REGLA ARQUITECTÓNICA: Si el modelo GLB no existe (null), no se crea nada en la Scene Graph
     if (modeloClonado === null) return;
