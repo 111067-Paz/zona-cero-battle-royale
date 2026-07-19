@@ -289,7 +289,7 @@ export class RendererTresD implements RendererJuego {
       this.aplicarEstadoVida(entidad, muerto);
     }
     if (!muerto) {
-      entidad.rig.raiz.rotation.y = -jugador.angulo;
+      entidad.rig.raiz.rotation.y = -jugador.angulo - Math.PI / 2;
     }
 
     // Dibujar el arma equipada actualmente en la mano del personaje
