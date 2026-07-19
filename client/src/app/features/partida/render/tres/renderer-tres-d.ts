@@ -201,19 +201,6 @@ export class RendererTresD implements RendererJuego {
     this.actualizarNumerosDanio(estado.numerosDanio);
     this.actualizarCamara(estado.jugadores, idJugadorPropio);
     this.animarMundo(ahoraMs);
-
-    // 1. Orientar chibis hacia la camara (billboard cilindrico para no inclinarlos sobre Z)
-    for (const entidad of this.jugadores.values()) {
-      entidad.rig.raiz.lookAt(new Vector3(this.camera.position.x, entidad.rig.raiz.position.y, this.camera.position.z));
-    }
-
-    // 2. Orientar copas de arboles y arbustos hacia la camara (billboards)
-    if (this.mundo && this.mundo.planosOrientables) {
-      for (const plano of this.mundo.planosOrientables) {
-        plano.lookAt(new Vector3(this.camera.position.x, plano.position.y, this.camera.position.z));
-      }
-    }
-
     this.renderer.render(this.scene, this.camera);
   }
 

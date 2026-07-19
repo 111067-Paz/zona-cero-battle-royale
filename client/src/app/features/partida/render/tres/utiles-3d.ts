@@ -19,7 +19,7 @@ export function direccionDesdeAngulo(angulo: number): Vector3 {
  * en codigo (DataTexture) — cero assets de imagen, coherente con la decision de arte del proyecto.
  */
 export function crearGradienteToon(): DataTexture {
-  const datos = new Uint8Array([90, 165, 255]);
+  const datos = new Uint8Array([60, 150, 255]);
   const textura = new DataTexture(datos, 3, 1, RedFormat);
   textura.minFilter = NearestFilter;
   textura.magFilter = NearestFilter;

@@ -54,38 +54,35 @@ export function construirChibi(personaje: Personaje): ChibiRig {
   sombra.position.y = 0.01;
   raiz.add(sombra);
 
-  // 2. Torso (Cuerpo principal plano con textura de pechera Toon)
-  const texTorso = crearTexturaTorso(personaje, especificacion.colorCuerpo, especificacion.colorDetalle);
-  const materialCuerpo = new MeshBasicMaterial({ map: texTorso, transparent: true, side: DoubleSide });
-  const cuerpo = new Mesh(new PlaneGeometry(RADIO_CUERPO * 2.2, RADIO_CUERPO * 2.2), materialCuerpo);
+  // 2. Torso (Cuerpo principal volumétrico suave)
+  const materialCuerpo = crearMaterial(especificacion.colorCuerpo);
+  const cuerpo = new Mesh(new SphereGeometry(RADIO_CUERPO, 32, 24), materialCuerpo);
   cuerpo.position.y = RADIO_CUERPO * 0.9;
   raiz.add(cuerpo);
 
-  // 3. Cabeza (Plana con textura de rostro Toon)
-  const texCabeza = crearTexturaCabeza(personaje, especificacion.colorCuerpo, especificacion.colorDetalle);
-  const materialCabeza = new MeshBasicMaterial({ map: texCabeza, transparent: true, side: DoubleSide });
-  const cabeza = new Mesh(new PlaneGeometry(RADIO_CABEZA * 2.2, RADIO_CABEZA * 2.2), materialCabeza);
+  // 3. Cabeza (Volumétrica suave)
+  const materialCabeza = crearMaterial(especificacion.colorCuerpo);
+  const cabeza = new Mesh(new SphereGeometry(RADIO_CABEZA, 32, 24), materialCabeza);
   cabeza.position.y = RADIO_CUERPO * 1.7 + RADIO_CABEZA * 0.6;
   raiz.add(cabeza);
 
   // 4. Extremidades articuladas (Brazos y Piernas)
-  const materialExtremidades = crearMaterial(especificacion.colorCuerpo);
   const legGeo = new CylinderGeometry(0.06, 0.06, 0.35, 16);
   for (const signo of [-1, 1]) {
-    const pierna = new Mesh(legGeo, materialExtremidades);
+    const pierna = new Mesh(legGeo, materialCuerpo);
     pierna.position.set(signo * 0.16, -RADIO_CUERPO * 0.7, 0);
     cuerpo.add(pierna);
   }
 
   // Brazo izquierdo (Reposo)
   const armGeo = new CylinderGeometry(0.05, 0.05, 0.4, 16);
-  const brazoIzq = new Mesh(armGeo, materialExtremidades);
+  const brazoIzq = new Mesh(armGeo, materialCuerpo);
   brazoIzq.position.set(-RADIO_CUERPO * 1.25, 0.1, 0);
   brazoIzq.rotation.z = 0.2;
   cuerpo.add(brazoIzq);
 
   // Brazo derecho (Apuntado frontal)
-  const brazoDer = new Mesh(armGeo, materialExtremidades);
+  const brazoDer = new Mesh(armGeo, materialCuerpo);
   brazoDer.position.set(RADIO_CUERPO * 1.25, 0.1, 0.1);
   brazoDer.rotation.x = -Math.PI / 2.3; // Apunta hacia adelante
   cuerpo.add(brazoDer);
@@ -195,323 +192,167 @@ function agregarRasgosYEquipo(
   colorDetalle: number,
   crearMaterial: (color: number) => MeshToonMaterial,
 ): void {
-  // Las características visuales y detalles ahora se dibujan directamente en las texturas Toon 2D (CanvasTexture) de la cabeza y del torso.
-}
+  const materialMetal = crearMaterial(0xa0a5b0);
+  const materialNegro = crearMaterial(COLOR_OSCURO);
 
-/** Hash simple y determinista de un id de jugador -> fase 0..2π (evita que todos boten sincronizados). */
-export function faseDesdeId(id: string): number {
-  let acumulado = 0;
-  for (let i = 0; i < id.length; i++) {
-    acumulado = (acumulado * 31 + id.charCodeAt(i)) % 100000;
-  }
-  return (acumulado / 100000) * Math.PI * 2;
-}
+  switch (personaje) {
+    case 'GATO': {
+      // Orejas de gato 3D suaves (16 caras)
+      const orejaGeometria = new ConeGeometry(RADIO_CABEZA * 0.32, RADIO_CABEZA * 0.55, 16);
+      for (const signo of [-1, 1]) {
+        const oreja = new Mesh(orejaGeometria, cabeza.material as MeshToonMaterial);
+        oreja.position.set(signo * RADIO_CABEZA * 0.55, RADIO_CABEZA * 0.8, 0);
+        oreja.rotation.z = signo * -0.3;
+        cabeza.add(oreja);
+      }
+      // Bigotes 3D suaves (8 caras)
+      const bigoteGeometria = new CylinderGeometry(0.008, 0.008, 0.3, 8);
+      for (const signo of [-1, 1]) {
+        for (const dy of [-0.03, 0.03]) {
+          const bigote = new Mesh(bigoteGeometria, materialNegro);
+          bigote.rotation.z = Math.PI / 2;
+          bigote.position.set(signo * (RADIO_CABEZA + 0.13), dy, RADIO_CABEZA * 0.5);
+          cabeza.add(bigote);
+        }
+      }
+      // Casco de acero 3D suave (32, 24)
+      const casco = new Mesh(new SphereGeometry(RADIO_CABEZA * 1.05, 32, 24, 0, Math.PI * 2, 0, Math.PI * 0.55), materialMetal);
+      casco.position.y = 0.05;
+      cabeza.add(casco);
+      // Hombreras 3D suaves (16, 12)
+      for (const signo of [-1, 1]) {
+        const hombrera = new Mesh(new SphereGeometry(0.08, 16, 12), materialMetal);
+        hombrera.position.set(signo * RADIO_CUERPO * 1.25, 0.28, 0);
+        cuerpo.add(hombrera);
+      }
+      return;
+    }
+    case 'DINO': {
+      // Púas de Dino 3D suaves (12 caras)
+      const puaGeometria = new ConeGeometry(RADIO_CUERPO * 0.16, RADIO_CUERPO * 0.4, 12);
+      for (let i = 0; i < 3; i++) {
+        const pua = new Mesh(puaGeometria, cuerpo.material as MeshToonMaterial);
+        pua.position.set(0, RADIO_CUERPO * (0.7 + i * 0.35), -RADIO_CUERPO * (0.55 - i * 0.1));
+        cuerpo.add(pua);
+      }
+      // Panza clara 3D suave (20, 16)
+      const materialPanza = crearMaterial(colorDetalle);
+      const panza = new Mesh(new SphereGeometry(RADIO_CUERPO * 0.6, 20, 16), materialPanza);
+      panza.scale.set(1, 0.8, 0.6);
+      panza.position.set(0, RADIO_CUERPO * 0.1, RADIO_CUERPO * 0.55);
+      cuerpo.add(panza);
 
-function crearTexturaCabeza(personaje: Personaje, colorCuerpo: number, colorDetalle: number): CanvasTexture {
-  const tam = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = tam;
-  canvas.height = tam;
-  const ctx = canvas.getContext('2d');
-  if (ctx === null) throw new Error('No se pudo obtener el contexto 2d');
+      // Cola de Dino 3D suave (16 caras)
+      const cola = new Mesh(new ConeGeometry(RADIO_CUERPO * 0.3, RADIO_CUERPO * 1.1, 16), cuerpo.material as MeshToonMaterial);
+      cola.position.set(0, -RADIO_CUERPO * 0.2, -RADIO_CUERPO * 0.95);
+      cola.rotation.x = -Math.PI / 3;
+      cuerpo.add(cola);
 
-  const cCuerpo = '#' + colorCuerpo.toString(16).padStart(6, '0');
-  const cDetalle = '#' + colorDetalle.toString(16).padStart(6, '0');
+      // Antiparras Rojas 3D
+      const materialRojo = crearMaterial(0xff3333);
+      const materialVidrio = crearMaterial(0x33ffff);
+      const marcoAntiparra = new Mesh(new BoxGeometry(RADIO_CABEZA * 1.4, RADIO_CABEZA * 0.38, RADIO_CABEZA * 0.4), materialRojo);
+      marcoAntiparra.position.set(0, 0, RADIO_CABEZA * 0.8);
+      cabeza.add(marcoAntiparra);
 
-  // Centro del canvas
-  const cx = tam / 2;
-  const cy = tam / 2 + 10;
-  const r = 70;
+      for (const signo of [-1, 1]) {
+        const lente = new Mesh(new CylinderGeometry(RADIO_CABEZA * 0.22, RADIO_CABEZA * 0.22, 0.05, 24), materialVidrio);
+        lente.rotation.x = Math.PI / 2;
+        lente.position.set(signo * RADIO_CABEZA * 0.38, 0, RADIO_CABEZA * 0.2);
+        marcoAntiparra.add(lente);
+      }
+      return;
+    }
+    case 'ROBO_PERRO': {
+      const materialDetalle = crearMaterial(colorDetalle);
+      // Antena 3D suave (12 caras)
+      const antena = new Mesh(new CylinderGeometry(0.012, 0.012, RADIO_CABEZA * 0.9, 12), materialDetalle);
+      antena.position.set(0, RADIO_CABEZA * 1.15, 0);
+      cabeza.add(antena);
+      // Punta de antena 3D suave (16, 12)
+      const puntaAntena = new Mesh(new SphereGeometry(0.045, 16, 12), materialDetalle);
+      puntaAntena.position.set(0, RADIO_CABEZA * 1.7, 0);
+      cabeza.add(puntaAntena);
+      // Visor 3D
+      const visor = new Mesh(new BoxGeometry(RADIO_CABEZA * 1.1, RADIO_CABEZA * 0.32, 0.05), materialDetalle);
+      visor.position.set(0, RADIO_CABEZA * 0.1, RADIO_CABEZA * 0.9);
+      cabeza.add(visor);
 
-  // 1. Dibujar rasgos traseros/orejas que van detrás de la cabeza
-  if (personaje === 'GATO') {
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 8;
-    ctx.fillStyle = cCuerpo;
-    
-    // Oreja Izq
-    ctx.beginPath();
-    ctx.moveTo(cx - 50, cy - 40);
-    ctx.lineTo(cx - 75, cy - 110);
-    ctx.lineTo(cx - 15, cy - 65);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
+      // Jetpack propulsor 3D
+      const materialBlanco = crearMaterial(0xeeeeee);
+      const jetpackBase = new Mesh(new BoxGeometry(RADIO_CUERPO * 1.0, RADIO_CUERPO * 0.7, RADIO_CUERPO * 0.4), materialBlanco);
+      jetpackBase.position.set(0, RADIO_CUERPO * 0.2, -RADIO_CUERPO * 0.85);
+      cuerpo.add(jetpackBase);
 
-    // Oreja Der
-    ctx.beginPath();
-    ctx.moveTo(cx + 50, cy - 40);
-    ctx.lineTo(cx + 75, cy - 110);
-    ctx.lineTo(cx + 15, cy - 65);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-  } else if (personaje === 'CONEJO') {
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 8;
-    ctx.fillStyle = cCuerpo;
+      const materialFuego = crearMaterial(0xff7700);
+      for (const signo of [-1, 1]) {
+        const propulsor = new Mesh(new CylinderGeometry(RADIO_CUERPO * 0.18, RADIO_CUERPO * 0.18, RADIO_CUERPO * 0.8, 16), materialMetal);
+        propulsor.position.set(signo * RADIO_CUERPO * 0.38, -RADIO_CUERPO * 0.2, 0);
+        jetpackBase.add(propulsor);
 
-    // Oreja Izq
-    ctx.save();
-    ctx.translate(cx - 30, cy - 50);
-    ctx.rotate(-0.15);
-    ctx.beginPath();
-    ctx.roundRect(-15, -90, 30, 100, 15);
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#ffc1cc';
-    ctx.beginPath();
-    ctx.roundRect(-8, -80, 16, 80, 8);
-    ctx.fill();
-    ctx.restore();
+        const llama = new Mesh(new ConeGeometry(RADIO_CUERPO * 0.14, RADIO_CUERPO * 0.5, 16), materialFuego);
+        llama.position.set(0, -RADIO_CUERPO * 0.55, 0);
+        llama.rotation.x = Math.PI;
+        propulsor.add(llama);
+      }
+      return;
+    }
+    case 'CONEJO': {
+      // Orejas largas 3D suaves (16 caras)
+      const orejaGeometria = new CylinderGeometry(RADIO_CABEZA * 0.15, RADIO_CABEZA * 0.2, RADIO_CABEZA * 1.6, 16);
+      for (const signo of [-1, 1]) {
+        const oreja = new Mesh(orejaGeometria, cabeza.material as MeshToonMaterial);
+        oreja.position.set(signo * RADIO_CABEZA * 0.35, RADIO_CABEZA * 1.4, 0);
+        oreja.rotation.z = signo * 0.15;
+        cabeza.add(oreja);
+      }
+      // Dientes
+      const materialDiente = crearMaterial(COLOR_DIENTE);
+      const dienteGeometria = new BoxGeometry(0.05, 0.08, 0.03);
+      for (const signo of [-1, 1]) {
+        const diente = new Mesh(dienteGeometria, materialDiente);
+        diente.position.set(signo * 0.04, -RADIO_CABEZA * 0.55, RADIO_CABEZA * 0.85);
+        cabeza.add(diente);
+      }
 
-    // Oreja Der
-    ctx.save();
-    ctx.translate(cx + 30, cy - 50);
-    ctx.rotate(0.15);
-    ctx.beginPath();
-    ctx.roundRect(-15, -90, 30, 100, 15);
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#ffc1cc';
-    ctx.beginPath();
-    ctx.roundRect(-8, -80, 16, 80, 8);
-    ctx.fill();
-    ctx.restore();
-  } else if (personaje === 'DINO') {
-    // Púas traseras
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 7;
-    ctx.fillStyle = cCuerpo;
-    for (let i = 0; i < 3; i++) {
-      ctx.save();
-      ctx.translate(cx + (i - 1) * 35, cy - 70);
-      ctx.rotate((i - 1) * 0.3);
-      ctx.beginPath();
-      ctx.moveTo(-15, 0);
-      ctx.lineTo(0, -35);
-      ctx.lineTo(15, 0);
-      ctx.closePath();
-      ctx.fill(); ctx.stroke();
-      ctx.restore();
+      // Traje espacial neón 3D
+      const materialNeonRosa = crearMaterial(0xff00bb);
+      const materialCoreCian = crearMaterial(0x00ffff);
+      const pecheraTraje = new Mesh(new BoxGeometry(RADIO_CUERPO * 1.25, RADIO_CUERPO * 0.8, RADIO_CUERPO * 1.05), materialNeonRosa);
+      pecheraTraje.position.set(0, 0, 0);
+      cuerpo.add(pecheraTraje);
+
+      const coreLuminoso = new Mesh(new SphereGeometry(RADIO_CUERPO * 0.22, 16, 12), materialCoreCian);
+      coreLuminoso.position.set(0, 0, RADIO_CUERPO * 0.55);
+      cuerpo.add(coreLuminoso);
+      return;
+    }
+    case 'ARDILLA': {
+      const materialCola = crearMaterial(colorDetalle);
+      // Cola en 3D suave (12, 24)
+      const cola = new Mesh(new TorusGeometry(RADIO_CUERPO * 0.85, RADIO_CUERPO * 0.28, 12, 24, Math.PI * 1.3), materialCola);
+      cola.position.set(0, RADIO_CUERPO * 0.9, -RADIO_CUERPO * 0.6);
+      cola.rotation.x = Math.PI / 2.3;
+      cuerpo.add(cola);
+
+      // Máscara Ninja 3D
+      const cintaMascara = new Mesh(new BoxGeometry(RADIO_CABEZA * 2.05, RADIO_CABEZA * 0.35, 0.05), materialNegro);
+      cintaMascara.position.set(0, 0, RADIO_CABEZA * 0.85);
+      cabeza.add(cintaMascara);
+
+      for (const signo of [-1, 1]) {
+        const nudo = new Mesh(new BoxGeometry(RADIO_CABEZA * 0.4, 0.08, 0.04), materialNegro);
+        nudo.rotation.z = signo * 0.6;
+        nudo.position.set(signo * 0.1, -0.05, -RADIO_CABEZA * 0.9);
+        cabeza.add(nudo);
+      }
+      return;
+    }
+    default: {
+      const exhaustivo: never = personaje;
+      throw new Error(`Personaje sin modelo 3D: ${exhaustivo}`);
     }
   }
-
-  // 2. Base de la cabeza
-  const grad = ctx.createRadialGradient(cx - 20, cy - 20, 10, cx, cy, r);
-  grad.addColorStop(0, '#ffffff');
-  grad.addColorStop(0.2, cCuerpo);
-  grad.addColorStop(1, cCuerpo);
-
-  ctx.fillStyle = grad;
-  ctx.strokeStyle = '#111424';
-  ctx.lineWidth = 8;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // 3. Detalles de cara y accesorios (máscaras, antiparras, etc.)
-  if (personaje === 'GATO') {
-    // Bigotes
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(cx - 90, cy + 5); ctx.lineTo(cx - 50, cy + 10);
-    ctx.moveTo(cx - 90, cy + 20); ctx.lineTo(cx - 50, cy + 20);
-    ctx.moveTo(cx + 90, cy + 5); ctx.lineTo(cx + 50, cy + 10);
-    ctx.moveTo(cx + 90, cy + 20); ctx.lineTo(cx + 50, cy + 20);
-    ctx.stroke();
-
-    // Casco
-    ctx.fillStyle = '#a0a5b0';
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r + 4, Math.PI, 0);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-  } else if (personaje === 'DINO') {
-    // Antiparras Rojas
-    ctx.fillStyle = '#ff3333';
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.roundRect(cx - 65, cy - 20, 130, 35, 8);
-    ctx.fill(); ctx.stroke();
-
-    // Lentes
-    ctx.fillStyle = '#33ffff';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(cx - 30, cy - 2, 14, 0, Math.PI * 2);
-    ctx.fill(); ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cx + 30, cy - 2, 14, 0, Math.PI * 2);
-    ctx.fill(); ctx.stroke();
-  } else if (personaje === 'ROBO_PERRO') {
-    // Visor
-    ctx.fillStyle = cDetalle;
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.roundRect(cx - 50, cy - 15, 100, 32, 6);
-    ctx.fill(); ctx.stroke();
-
-    // Antena
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - r);
-    ctx.lineTo(cx, cy - r - 40);
-    ctx.stroke();
-    ctx.fillStyle = cDetalle;
-    ctx.beginPath();
-    ctx.arc(cx, cy - r - 40, 12, 0, Math.PI * 2);
-    ctx.fill(); ctx.stroke();
-  } else if (personaje === 'ARDILLA') {
-    // Máscara Ninja
-    ctx.fillStyle = '#111424';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy - 5, r - 4, 30, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // 4. Ojos (Salvo Robo Perro que tiene el visor liso)
-  if (personaje !== 'ROBO_PERRO') {
-    ctx.fillStyle = '#111424';
-    const dyOjos = personaje === 'DINO' ? -2 : 0;
-    
-    // Ojo Izq
-    ctx.beginPath();
-    ctx.ellipse(cx - 24, cy + dyOjos, 10, 15, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Ojo Der
-    ctx.beginPath();
-    ctx.ellipse(cx + 24, cy + dyOjos, 10, 15, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Brillos de ojos (blancos)
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(cx - 21, cy - 5 + dyOjos, 4, 0, Math.PI * 2);
-    ctx.arc(cx - 25, cy + 4 + dyOjos, 2, 0, Math.PI * 2);
-    ctx.arc(cx + 27, cy - 5 + dyOjos, 4, 0, Math.PI * 2);
-    ctx.arc(cx + 23, cy + 4 + dyOjos, 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // 5. Mejillas rosadas
-  ctx.fillStyle = '#ff8fc7';
-  ctx.globalAlpha = 0.5;
-  ctx.beginPath();
-  ctx.ellipse(cx - 42, cy + 20, 12, 7, 0, 0, Math.PI * 2);
-  ctx.ellipse(cx + 42, cy + 20, 12, 7, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
-  // 6. Boca o detalles de dientes
-  if (personaje === 'CONEJO') {
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(cx - 10, cy + 18, 9, 14, 2);
-    ctx.roundRect(cx + 1, cy + 18, 9, 14, 2);
-    ctx.fill(); ctx.stroke();
-  } else {
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 4;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.arc(cx, cy + 12, 8, 0.1, Math.PI - 0.1);
-    ctx.stroke();
-  }
-
-  return new CanvasTexture(canvas);
-}
-
-function crearTexturaTorso(personaje: Personaje, colorCuerpo: number, colorDetalle: number): CanvasTexture {
-  const tam = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = tam;
-  canvas.height = tam;
-  const ctx = canvas.getContext('2d');
-  if (ctx === null) throw new Error('No se pudo obtener el contexto 2d');
-
-  const cCuerpo = '#' + colorCuerpo.toString(16).padStart(6, '0');
-  const cDetalle = '#' + colorDetalle.toString(16).padStart(6, '0');
-
-  const cx = tam / 2;
-  const cy = tam / 2 + 10;
-  const rx = 52;
-  const ry = 68;
-
-  // 1. Cuerpo base
-  ctx.fillStyle = cCuerpo;
-  ctx.strokeStyle = '#111424';
-  ctx.lineWidth = 8;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // 2. Detalles específicos de vestimenta/pechera
-  if (personaje === 'GATO') {
-    // Armadura de pecho metálica
-    ctx.fillStyle = '#a0a5b0';
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 10, rx - 10, ry - 20, 0, 0, Math.PI * 2);
-    ctx.fill(); ctx.stroke();
-    
-    // Remaches de armadura
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(cx - 20, cy - 15, 3, 0, Math.PI * 2);
-    ctx.arc(cx + 20, cy - 15, 3, 0, Math.PI * 2);
-    ctx.arc(cx - 25, cy + 20, 3, 0, Math.PI * 2);
-    ctx.arc(cx + 25, cy + 20, 3, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (personaje === 'CONEJO') {
-    // Traje espacial rosa + Core cian
-    ctx.fillStyle = '#ff00bb';
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 5, rx - 6, ry - 14, 0, 0, Math.PI * 2);
-    ctx.fill(); ctx.stroke();
-
-    ctx.fillStyle = '#00ffff';
-    ctx.beginPath();
-    ctx.arc(cx, cy + 12, 16, 0, Math.PI * 2);
-    ctx.fill(); ctx.stroke();
-  } else if (personaje === 'DINO') {
-    // Panza de color detalle
-    ctx.fillStyle = cDetalle;
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 15, rx - 14, ry - 24, 0, 0, Math.PI * 2);
-    ctx.fill(); ctx.stroke();
-  } else if (personaje === 'ROBO_PERRO') {
-    // Paneles mecánicos
-    ctx.fillStyle = cDetalle;
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.rect(cx - 28, cy - 15, 56, 45);
-    ctx.fill(); ctx.stroke();
-  } else if (personaje === 'ARDILLA') {
-    // Cinturón ninja
-    ctx.strokeStyle = '#111424';
-    ctx.lineWidth = 14;
-    ctx.beginPath();
-    ctx.moveTo(cx - rx + 4, cy - ry + 25);
-    ctx.lineTo(cx + rx - 4, cy + ry - 25);
-    ctx.stroke();
-  }
-
-  return new CanvasTexture(canvas);
 }
 
 
