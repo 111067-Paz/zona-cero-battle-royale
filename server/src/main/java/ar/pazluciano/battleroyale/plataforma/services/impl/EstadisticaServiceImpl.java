@@ -3,6 +3,7 @@ package ar.pazluciano.battleroyale.plataforma.services.impl;
 import ar.pazluciano.battleroyale.plataforma.dtos.EstadisticaDTO;
 import ar.pazluciano.battleroyale.plataforma.entities.EstadisticaJugador;
 import ar.pazluciano.battleroyale.plataforma.entities.Usuario;
+import ar.pazluciano.battleroyale.plataforma.exceptions.TokenInvalidoException;
 import ar.pazluciano.battleroyale.plataforma.mappers.EstadisticaMapper;
 import ar.pazluciano.battleroyale.plataforma.repositories.EstadisticaJugadorRepository;
 import ar.pazluciano.battleroyale.plataforma.repositories.UsuarioRepository;
@@ -14,7 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Lee estadisticas acumuladas (PLAN §15.2). Con Lazy Initialization defensiva si falta la fila.
+ * Lee estadisticas acumuladas (PLAN §15.2). Con Lazy Initialization defensiva si falta la fila
+ * y conversion a TokenInvalidoException (HTTP 401) si el usuario en el token ya no existe.
  */
 @Service
 @RequiredArgsConstructor
@@ -31,7 +33,7 @@ public class EstadisticaServiceImpl implements EstadisticaService {
         EstadisticaJugador estadistica = estadisticaJugadorRepository.findByUsuarioId(idUsuario)
                 .orElseGet(() -> {
                     Usuario usuario = usuarioRepository.findById(idUsuario)
-                            .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado: " + idUsuario));
+                            .orElseThrow(() -> new TokenInvalidoException("Sesión invalida o usuario no encontrado: " + idUsuario));
                     return estadisticaJugadorRepository.save(new EstadisticaJugador(usuario));
                 });
         return estadisticaMapper.toDTO(estadistica);

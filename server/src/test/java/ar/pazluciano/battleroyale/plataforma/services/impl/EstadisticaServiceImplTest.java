@@ -3,6 +3,7 @@ package ar.pazluciano.battleroyale.plataforma.services.impl;
 import ar.pazluciano.battleroyale.plataforma.dtos.EstadisticaDTO;
 import ar.pazluciano.battleroyale.plataforma.entities.EstadisticaJugador;
 import ar.pazluciano.battleroyale.plataforma.entities.Usuario;
+import ar.pazluciano.battleroyale.plataforma.exceptions.TokenInvalidoException;
 import ar.pazluciano.battleroyale.plataforma.mappers.EstadisticaMapper;
 import ar.pazluciano.battleroyale.plataforma.repositories.EstadisticaJugadorRepository;
 import ar.pazluciano.battleroyale.plataforma.repositories.UsuarioRepository;
@@ -88,6 +89,17 @@ class EstadisticaServiceImplTest {
         // THEN
         assertNotNull(resultado);
         assertEquals("jugador7", resultado.getNombreUsuario());
+    }
+
+    @Test
+    @DisplayName("misEstadisticas sin usuario en base de datos lanza TokenInvalidoException (HTTP 401)")
+    void misEstadisticas_usuarioNoExisteEnBD_lanzaTokenInvalidoException() {
+        // GIVEN
+        when(estadisticaJugadorRepository.findByUsuarioId(ID_USUARIO)).thenReturn(Optional.empty());
+        when(usuarioRepository.findById(ID_USUARIO)).thenReturn(Optional.empty());
+
+        // WHEN + THEN
+        assertThrows(TokenInvalidoException.class, () -> estadisticaService.misEstadisticas(ID_USUARIO));
     }
 
     @Test

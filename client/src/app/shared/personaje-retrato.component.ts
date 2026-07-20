@@ -103,7 +103,13 @@ export class PersonajeRetratoComponent {
 
   protected readonly idInstancia = `pr${PersonajeRetratoComponent.contadorInstancias++}`;
 
-  protected readonly imagenFallo = linkedSignal({ source: this.personaje, computation: () => false });
+  protected readonly imagenFallo = linkedSignal({
+    source: this.personaje,
+    computation: (p) => {
+      const slug = especificacionDe(p).slug;
+      return slug === 'esqueleto' || slug === 'mako' || slug === 'shark';
+    },
+  });
   protected readonly ruta = computed(() => rutaRetrato(this.personaje()));
   protected readonly nombre = computed(() => especificacionDe(this.personaje()).nombre);
   protected readonly colorCuerpo = computed(() => hexCss(especificacionDe(this.personaje()).colorCuerpo));
