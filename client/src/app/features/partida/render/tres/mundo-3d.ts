@@ -197,8 +197,8 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
 
   const clavesInstancias = Object.keys(tiposInstancias);
 
-  // Sembrar 3,500 elementos de vegetacion tupida e intensa por toda la superficie gracias al patron FLYWEIGHT
-  for (let i = 0; i < 3500; i++) {
+  // Sembrar 6,000 elementos de vegetacion tupida e intensa por toda la superficie gracias al patron FLYWEIGHT
+  for (let i = 0; i < 6000; i++) {
     const rx = 4 + Math.random() * (anchoTotal - 8);
     const ry = 4 + Math.random() * (altoTotal - 8);
     const tipoTarget = clavesInstancias[i % clavesInstancias.length];

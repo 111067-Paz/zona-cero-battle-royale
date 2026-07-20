@@ -431,6 +431,18 @@ public class Partida implements VistaMundo {
         for (Vector2 punto : mapa.getSpawnsBotin()) {
             botines.add(fabricaBotin.crear(contadorIdBotin++, punto, rng));
         }
+
+        // Poblar 45 botines adicionales (armas y botiquines) esparcidos por la isla
+        double ancho = mapa.getAncho();
+        double alto = mapa.getAlto();
+        for (int i = 0; i < 45; i++) {
+            double rx = 12.0 + rng.nextDouble() * (ancho - 24.0);
+            double ry = 12.0 + rng.nextDouble() * (alto - 24.0);
+            Vector2 pos = new Vector2(rx, ry);
+            if (!colisiones.colisionaConObstaculo(pos, 0.5, mapa.getObstaculos())) {
+                botines.add(fabricaBotin.crear(contadorIdBotin++, pos, rng));
+            }
+        }
     }
 
     /** VistaMundo: jugadores VIVOS distintos del propio (conectados o no, R26). Reusado por combate y bots. */

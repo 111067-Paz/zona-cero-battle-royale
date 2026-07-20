@@ -44,8 +44,14 @@ export class TreePrefab extends BasePrefab {
       this.modeloLoaded = modeloClonado.escena;
       const cfg = configMgr.environment['ARBOL'];
       let baseScale = cfg?.scale ?? 1.2;
-      if (urlTarget.endsWith('.fbx')) {
+      if (urlTarget.includes('PalmTree')) {
+        baseScale = 0.018;
+      } else if (urlTarget.includes('PineTree') || urlTarget.includes('NormalTree')) {
+        baseScale = 0.016;
+      } else if (urlTarget.endsWith('.fbx')) {
         baseScale = 0.015;
+      } else {
+        baseScale = 1.1;
       }
       const escalaAleatoria = baseScale * (0.85 + Math.random() * 0.4);
       this.modeloLoaded.scale.setScalar(escalaAleatoria);
