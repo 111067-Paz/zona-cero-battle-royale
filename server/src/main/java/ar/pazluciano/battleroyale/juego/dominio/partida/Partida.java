@@ -313,7 +313,18 @@ public class Partida implements VistaMundo {
             buscarJugador(proyectil.getIdDueno()).ifPresent(Jugador::sumarKill);
             eventosPendientes.add(new EventoKill(proyectil.getIdDueno(), victima.getId(), proyectil.getArma()));
             ordenEliminacion.add(victima.getId());
+            soltarBotinAlMorir(victima);
         }
+    }
+
+    private void soltarBotinAlMorir(Jugador victima) {
+        TipoArma tipoArma = victima.getArma().tipo();
+        TipoBotin tipoBotin = switch (tipoArma) {
+            case ESCOPETA -> TipoBotin.ESCOPETA;
+            case RIFLE -> TipoBotin.RIFLE;
+            default -> TipoBotin.PISTOLA;
+        };
+        botines.add(new Botin(contadorIdBotin++, victima.getPosicion(), tipoBotin));
     }
 
     private void procesarDisparos() {
@@ -361,6 +372,7 @@ public class Partida implements VistaMundo {
             if (!jugador.estaVivo()) {
                 eventosPendientes.add(new EventoMuerteZona(jugador.getId()));
                 ordenEliminacion.add(jugador.getId());
+                soltarBotinAlMorir(jugador);
             }
         }
     }

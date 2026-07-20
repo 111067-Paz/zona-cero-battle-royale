@@ -1,4 +1,4 @@
-import { Object3D } from 'three';
+import { BoxGeometry, ConeGeometry, Group, Mesh, MeshStandardMaterial, Object3D } from 'three';
 import { ConfigManager } from '../config/config-manager';
 import { AssetManager } from '../managers/asset-manager';
 import { BasePrefab } from './base-prefab';
@@ -88,31 +88,83 @@ export class RockPrefab extends BasePrefab {
 }
 
 export class HousePrefab extends BasePrefab {
-  private modeloLoaded: Object3D | null = null;
-
   constructor() {
     super();
-    this.inicializar();
+    this.construirCabana();
   }
 
-  private inicializar(): void {
-    const assetMgr = AssetManager.getInstancia();
-    const configMgr = ConfigManager.getInstancia();
+  private construirCabana(): void {
+    const grupoCasa = new Group();
 
-    const modeloClonado = assetMgr.obtenerModeloEntorno('CARPA');
+    // Paredes de madera
+    const matParedes = new MeshStandardMaterial({
+      color: 0x78350f,
+      roughness: 0.7,
+      metalness: 0.1,
+    });
+    const paredes = new Mesh(new BoxGeometry(3.6, 2.6, 3.6), matParedes);
+    paredes.position.y = 1.3;
 
-    if (modeloClonado !== null) {
-      this.modeloLoaded = modeloClonado.escena;
-      const cfg = configMgr.environment['CARPA'];
-      if (cfg?.scale) {
-        this.modeloLoaded.scale.setScalar(cfg.scale);
-      }
-      this.configurarSombras(this.modeloLoaded);
-      this.contenedor.add(this.modeloLoaded);
-    }
+    // Techo a dos aguas de paja / madera oscura
+    const matTecho = new MeshStandardMaterial({
+      color: 0x451a03,
+      roughness: 0.6,
+    });
+    const techo = new Mesh(new ConeGeometry(3.2, 1.8, 4), matTecho);
+    techo.position.y = 3.5;
+    techo.rotation.y = Math.PI / 4;
+
+    // Marco de puerta
+    const matPuerta = new MeshStandardMaterial({
+      color: 0x292524,
+      roughness: 0.9,
+    });
+    const puerta = new Mesh(new BoxGeometry(1.0, 1.8, 3.65), matPuerta);
+    puerta.position.set(0, 0.9, 0);
+
+    grupoCasa.add(paredes, techo, puerta);
+    this.configurarSombras(grupoCasa);
+    this.contenedor.add(grupoCasa);
   }
 
   tieneModeloValido(): boolean {
-    return this.modeloLoaded !== null;
+    return true;
+  }
+}
+
+export class CajaPrefab extends BasePrefab {
+  constructor() {
+    super();
+    this.construirCaja();
+  }
+
+  private construirCaja(): void {
+    const grupoCaja = new Group();
+
+    // Caja de madera reforzada
+    const matMadera = new MeshStandardMaterial({
+      color: 0xb45309,
+      roughness: 0.6,
+      metalness: 0.2,
+    });
+    const cuerpoCaja = new Mesh(new BoxGeometry(1.6, 1.6, 1.6), matMadera);
+    cuerpoCaja.position.y = 0.8;
+
+    // Herrajes de hierro en bordes
+    const matHierro = new MeshStandardMaterial({
+      color: 0x334155,
+      roughness: 0.4,
+      metalness: 0.8,
+    });
+    const marco = new Mesh(new BoxGeometry(1.64, 0.22, 1.64), matHierro);
+    marco.position.y = 0.8;
+
+    grupoCaja.add(cuerpoCaja, marco);
+    this.configurarSombras(grupoCaja);
+    this.contenedor.add(grupoCaja);
+  }
+
+  tieneModeloValido(): boolean {
+    return true;
   }
 }

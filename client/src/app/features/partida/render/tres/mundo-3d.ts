@@ -1,6 +1,6 @@
 import { Group, Matrix4, Mesh, MeshStandardMaterial, Object3D, PlaneGeometry, Vector3 } from 'three';
 import { Mapa } from '../../../../models/mapa';
-import { HousePrefab, RockPrefab, TreePrefab } from './prefabs/environment-prefabs';
+import { CajaPrefab, HousePrefab, RockPrefab, TreePrefab } from './prefabs/environment-prefabs';
 import { WaterShader } from './shaders/water-shader';
 import { TerrainManager } from './terrain/terrain-manager';
 import { aVector3 } from './utiles-3d';
@@ -127,13 +127,16 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
         }
         break;
       }
-      case 'CARPA':
-      case 'CAJA': {
+      case 'CARPA': {
         const houseP = new HousePrefab();
-        if (houseP.tieneModeloValido()) {
-          houseP.contenedor.position.copy(aVector3(cx, cy));
-          grupo.add(houseP.contenedor);
-        }
+        houseP.contenedor.position.copy(aVector3(cx, cy));
+        grupo.add(houseP.contenedor);
+        break;
+      }
+      case 'CAJA': {
+        const cajaP = new CajaPrefab();
+        cajaP.contenedor.position.copy(aVector3(cx, cy));
+        grupo.add(cajaP.contenedor);
         break;
       }
     }
