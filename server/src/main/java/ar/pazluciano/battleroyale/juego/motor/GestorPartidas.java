@@ -115,7 +115,9 @@ public class GestorPartidas {
                 Personaje.PIRATA_ANNE,
                 Personaje.PIRATA_HENRY,
                 Personaje.ESQUELETO,
-                Personaje.TIBURON
+                Personaje.TIBURON,
+                Personaje.MAKO,
+                Personaje.SHARK
         );
         for (int i = 0; i < cantidadBots; i++) {
             String idBot = "bot-" + i;

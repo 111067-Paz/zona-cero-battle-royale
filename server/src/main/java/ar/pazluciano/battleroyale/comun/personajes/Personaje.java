@@ -16,6 +16,8 @@ public enum Personaje {
     PIRATA_HENRY,
     ESQUELETO,
     TIBURON,
+    MAKO,
+    SHARK,
     GATO,
     DINO,
     ROBO_PERRO,

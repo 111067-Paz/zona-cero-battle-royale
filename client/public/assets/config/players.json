@@ -59,5 +59,29 @@
       "walk": "Walk",
       "run": "Run"
     }
+  },
+  "mako": {
+    "model": "assets/characters/Characters_Mako.gltf",
+    "name": "Pirata Mako",
+    "scale": 1.2,
+    "speed": 6.2,
+    "hp": 100,
+    "animations": {
+      "idle": "Idle",
+      "walk": "Walk",
+      "run": "Run"
+    }
+  },
+  "shark": {
+    "model": "assets/characters/Characters_Shark.gltf",
+    "name": "Tiburón Voraz",
+    "scale": 1.2,
+    "speed": 6.0,
+    "hp": 100,
+    "animations": {
+      "idle": "Idle",
+      "walk": "Walk",
+      "run": "Run"
+    }
   }
 }
