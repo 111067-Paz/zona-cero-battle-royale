@@ -1,7 +1,9 @@
 import { Group, Matrix4, Mesh, MeshStandardMaterial, Object3D, PlaneGeometry, Vector3 } from 'three';
 import { Mapa } from '../../../../models/mapa';
-import { CajaPrefab, HousePrefab, RockPrefab, TreePrefab } from './prefabs/environment-prefabs';
+import { Nubes3D } from './nubes-3d';
+import { CajaPrefab, HousePrefab, PlantPrefab, RockPrefab, TreePrefab } from './prefabs/environment-prefabs';
 import { WaterShader } from './shaders/water-shader';
+import { Sol3D } from './sol-3d';
 import { TerrainManager } from './terrain/terrain-manager';
 import { aVector3 } from './utiles-3d';
 import { VegetationManager } from './vegetation/vegetation-manager';
@@ -21,6 +23,8 @@ export interface Mundo3D {
   grupo: Group;
   arboles: readonly ArbolAnimado[];
   aguas: readonly AguaAnimada[];
+  sol: Sol3D;
+  nubes: Nubes3D;
   terrainManager: TerrainManager;
   vegetationManager: VegetationManager;
   dispose(): void;
@@ -29,7 +33,7 @@ export interface Mundo3D {
 /**
  * Construye el mundo 3D altamente detallado de "Ultimate Stylized Nature":
  * - Terreno modular PBR (TerrainManager)
- * - Caminos de tierra sutiles (Dirt Trails)
+ * - Sol 3D brillante y atmósfera con Cúmulos de Nubes 3D (Sol3D, Nubes3D)
  * - Bosques variados (Abedules, Arces, Pinos, Palmeras, Árboles secos y Ramas)
  * - Rocas y Piedras orgánicas
  * - Parches masivos instanciados de césped, arbustos, flores y plantas (VegetationManager)
@@ -42,12 +46,17 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
   const terrainManager = new TerrainManager();
   const vegetationManager = new VegetationManager();
 
-  // 1. Construir terreno modular PBR por Chunks
+  // 1. Sol 3D brillante y Cúmulos de Nubes 3D en la atmósfera
+  const sol = new Sol3D(new Vector3(140, 180, 75));
+  const nubes = new Nubes3D(mapa.ancho, mapa.alto, 28);
+  grupo.add(sol.contenedor, sol.luzDireccional, sol.luzDireccional.target, nubes.contenedor);
+
+  // 2. Construir terreno modular PBR por Chunks
   terrainManager.construirTerreno(mapa.ancho, mapa.alto).then(() => {
     grupo.add(terrainManager.grupo);
   });
 
-  // 2. Construir caminos de tierra (Dirt Trails)
+  // 3. Construir caminos de tierra (Dirt Trails)
   const matTierra = new MeshStandardMaterial({
     color: 0x6b4c33,
     roughness: 0.95,
@@ -58,30 +67,37 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
   const anchoTotal = mapa.ancho;
   const altoTotal = mapa.alto;
 
-  // Camino principal horizontal y vertical
-  const caminoH = new Mesh(new PlaneGeometry(anchoTotal, 6), matTierra);
-  caminoH.rotation.x = -Math.PI / 2;
-  caminoH.position.set(anchoTotal / 2, 0.015, altoTotal / 2);
-  caminoH.receiveShadow = true;
-  grupo.add(caminoH);
+  for (const deco of mapa.decoraciones) {
+    if (deco.tipo === 'CAMINO') {
+      const cx = deco.x + deco.ancho / 2;
+      const cy = deco.y + deco.alto / 2;
 
-  const caminoV = new Mesh(new PlaneGeometry(6, altoTotal), matTierra);
-  caminoV.rotation.x = -Math.PI / 2;
-  caminoV.position.set(anchoTotal / 2, 0.015, altoTotal / 2);
-  caminoV.receiveShadow = true;
-  grupo.add(caminoV);
+      const caminoGeo = new PlaneGeometry(deco.ancho, deco.alto);
+      const caminoMesh = new Mesh(caminoGeo, matTierra);
+      caminoMesh.position.copy(aVector3(cx, cy, 0.015));
+      caminoMesh.receiveShadow = true;
+      grupo.add(caminoMesh);
+    } else if (deco.tipo === 'RIO' || deco.tipo === 'LAGO') {
+      const cx = deco.x + deco.ancho / 2;
+      const cy = deco.y + deco.alto / 2;
 
-  // 3. Procesar decoraciones de agua (Río / Lago) con Shader de Agua desacoplado
-  for (const decoracion of mapa.decoraciones) {
-    if (decoracion.tipo === 'RIO' || decoracion.tipo === 'LAGO') {
-      const centro = aVector3(decoracion.x + decoracion.ancho / 2, decoracion.y + decoracion.alto / 2);
-      const waterMat = WaterShader.createWaterMaterial(decoracion.tipo === 'RIO' ? 0x38bdf8 : 0x0284c7);
-      const meshWater = new Mesh(new PlaneGeometry(decoracion.ancho, decoracion.alto), waterMat);
-      meshWater.rotation.x = -Math.PI / 2;
-      meshWater.position.copy(centro);
-      meshWater.position.y = 0.02;
-      grupo.add(meshWater);
-      aguas.push({ mesh: meshWater, colorBase: 0x38bdf8, colorClaro: 0x7dd3fc });
+      const aguaGeo = new PlaneGeometry(deco.ancho, deco.alto);
+      const matAgua = new MeshStandardMaterial({
+        color: 0x0284c7,
+        roughness: 0.1,
+        metalness: 0.8,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const aguaMesh = new Mesh(aguaGeo, matAgua);
+      aguaMesh.position.copy(aVector3(cx, cy, 0.01));
+      grupo.add(aguaMesh);
+
+      aguas.push({
+        mesh: aguaMesh,
+        colorBase: 0x0284c7,
+        colorClaro: 0x38bdf8,
+      });
     }
   }
 
@@ -108,6 +124,13 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
               grupo.add(subTree.contenedor);
               arboles.push({ copa: subTree.contenedor, fase: Math.random() * Math.PI * 2 });
             }
+          }
+
+          // Sembrar flores y plantas decorativas en la base del árbol
+          const plantP = new PlantPrefab();
+          if (plantP.tieneModeloValido()) {
+            plantP.contenedor.position.copy(aVector3(cx + (Math.random() - 0.5) * 3, cy + (Math.random() - 0.5) * 3));
+            grupo.add(plantP.contenedor);
           }
         }
         break;
@@ -142,14 +165,18 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
     }
   }
 
-  // 5. Poblar masa masiva instanciada de pasto, flores, ramas y arbustos decorativos en VRAM (650+ elementos)
+  // 5. Poblar masa masiva instanciada de pasto, flores, ramas y arbustos decorativos en VRAM (850+ elementos)
   const tiposInstancias: { [key: string]: Matrix4[] } = {
     'assets/vegetation/Grass_Large.gltf': [],
     'assets/vegetation/Grass_Small.gltf': [],
     'assets/vegetation/Grass_Large_Extruded.gltf': [],
+    'assets/vegetation/Flower_1.gltf': [],
     'assets/vegetation/Flower_1_Clump.gltf': [],
+    'assets/vegetation/Flower_2.gltf': [],
     'assets/vegetation/Flower_2_Clump.gltf': [],
     'assets/vegetation/Flower_3_Clump.gltf': [],
+    'assets/vegetation/Flower_4_Clump.gltf': [],
+    'assets/vegetation/Flower_5_Clump.gltf': [],
     'assets/vegetation/Bush.gltf': [],
     'assets/vegetation/Bush_Large.gltf': [],
     'assets/vegetation/Bush_Small.gltf': [],
@@ -161,12 +188,13 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
     'assets/vegetation/Plant_Flowers.fbx': [],
     'assets/vegetation/DeadTree_1.gltf': [],
     'assets/vegetation/DeadTree_3.gltf': [],
+    'assets/rocks/Rock_1.fbx': [],
+    'assets/rocks/Rock_2.fbx': [],
   };
 
   const clavesInstancias = Object.keys(tiposInstancias);
 
-  // Sembrar 650 grupos de vegetación tupida e intensa por toda la superficie
-  for (let i = 0; i < 650; i++) {
+  for (let i = 0; i < 850; i++) {
     const rx = 4 + Math.random() * (anchoTotal - 8);
     const ry = 4 + Math.random() * (altoTotal - 8);
     const tipoTarget = clavesInstancias[i % clavesInstancias.length];
@@ -197,6 +225,8 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
     grupo,
     arboles,
     aguas,
+    sol,
+    nubes,
     terrainManager,
     vegetationManager,
     dispose(): void {

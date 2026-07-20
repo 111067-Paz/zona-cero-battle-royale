@@ -6,13 +6,23 @@ import { BasePrefab } from './base-prefab';
 const CATALOGO_ARBOLES = [
   'assets/vegetation/MapleTree_1.gltf', 'assets/vegetation/MapleTree_2.gltf', 'assets/vegetation/MapleTree_3.gltf', 'assets/vegetation/MapleTree_4.gltf', 'assets/vegetation/MapleTree_5.gltf',
   'assets/vegetation/BirchTree_1.gltf', 'assets/vegetation/BirchTree_2.gltf', 'assets/vegetation/BirchTree_3.gltf', 'assets/vegetation/BirchTree_4.gltf', 'assets/vegetation/BirchTree_5.gltf',
-  'assets/vegetation/DeadTree_1.gltf', 'assets/vegetation/DeadTree_2.gltf', 'assets/vegetation/DeadTree_3.gltf', 'assets/vegetation/DeadTree_4.gltf', 'assets/vegetation/DeadTree_5.gltf', 'assets/vegetation/DeadTree_6.gltf', 'assets/vegetation/DeadTree_7.gltf', 'assets/vegetation/DeadTree_8.gltf',
-  'assets/vegetation/PineTree_1.fbx', 'assets/vegetation/PineTree_2.fbx', 'assets/vegetation/PineTree_3.fbx',
-  'assets/vegetation/PalmTree_1.fbx', 'assets/vegetation/PalmTree_2.fbx'
+  'assets/vegetation/DeadTree_1.gltf', 'assets/vegetation/DeadTree_2.gltf', 'assets/vegetation/DeadTree_3.gltf', 'assets/vegetation/DeadTree_4.gltf', 'assets/vegetation/DeadTree_5.gltf', 'assets/vegetation/DeadTree_6.gltf', 'assets/vegetation/DeadTree_7.gltf', 'assets/vegetation/DeadTree_8.gltf', 'assets/vegetation/DeadTree_9.gltf', 'assets/vegetation/DeadTree_10.gltf',
+  'assets/vegetation/PineTree_1.fbx', 'assets/vegetation/PineTree_2.fbx', 'assets/vegetation/PineTree_3.fbx', 'assets/vegetation/PineTree_4.fbx', 'assets/vegetation/PineTree_5.fbx',
+  'assets/vegetation/NormalTree_1.fbx', 'assets/vegetation/NormalTree_2.fbx', 'assets/vegetation/NormalTree_3.fbx', 'assets/vegetation/NormalTree_4.fbx', 'assets/vegetation/NormalTree_5.fbx',
+  'assets/vegetation/PalmTree_1.fbx', 'assets/vegetation/PalmTree_2.fbx', 'assets/vegetation/PalmTree_3.fbx', 'assets/vegetation/PalmTree_4.fbx', 'assets/vegetation/PalmTree_5.fbx'
 ];
 
 const CATALOGO_ROCAS = [
-  'assets/vegetation/Rock_1.fbx', 'assets/vegetation/Rock_2.fbx', 'assets/vegetation/Rock_3.fbx', 'assets/vegetation/Rock_4.fbx', 'assets/vegetation/Rock_5.fbx'
+  'assets/vegetation/Rock_1.fbx', 'assets/vegetation/Rock_2.fbx', 'assets/vegetation/Rock_3.fbx', 'assets/vegetation/Rock_4.fbx', 'assets/vegetation/Rock_5.fbx',
+  'assets/rocks/Rock_1.fbx', 'assets/rocks/Rock_2.fbx', 'assets/rocks/Rock_3.fbx', 'assets/rocks/Rock_4.fbx', 'assets/rocks/Rock_5.fbx'
+];
+
+const CATALOGO_FLORES_Y_PLANTAS = [
+  'assets/vegetation/Flower_1.gltf', 'assets/vegetation/Flower_1_Clump.gltf',
+  'assets/vegetation/Flower_2.gltf', 'assets/vegetation/Flower_2_Clump.gltf',
+  'assets/vegetation/Flower_3_Clump.gltf', 'assets/vegetation/Flower_4_Clump.gltf', 'assets/vegetation/Flower_5_Clump.gltf',
+  'assets/vegetation/Plant_1.fbx', 'assets/vegetation/Plant_2.fbx', 'assets/vegetation/Plant_Flowers.fbx',
+  'assets/vegetation/Bush.gltf', 'assets/vegetation/Bush_Flowers.gltf', 'assets/vegetation/Bush_Large.gltf', 'assets/vegetation/Bush_Large_Flowers.gltf', 'assets/vegetation/Bush_Small.gltf', 'assets/vegetation/Bush_Small_Flowers.gltf'
 ];
 
 export class TreePrefab extends BasePrefab {
@@ -87,6 +97,40 @@ export class RockPrefab extends BasePrefab {
   }
 }
 
+export class PlantPrefab extends BasePrefab {
+  private modeloLoaded: Object3D | null = null;
+
+  constructor(urlEspecifica?: string) {
+    super();
+    this.inicializar(urlEspecifica);
+  }
+
+  private inicializar(urlEspecifica?: string): void {
+    const assetMgr = AssetManager.getInstancia();
+
+    const urlTarget = urlEspecifica ?? CATALOGO_FLORES_Y_PLANTAS[Math.floor(Math.random() * CATALOGO_FLORES_Y_PLANTAS.length)];
+    const modeloClonado = assetMgr.models.clonarModelo(urlTarget);
+
+    if (modeloClonado !== null) {
+      this.modeloLoaded = modeloClonado.escena;
+      let baseScale = 1.0;
+      if (urlTarget.endsWith('.fbx')) {
+        baseScale = 0.015;
+      }
+      const escalaAleatoria = baseScale * (0.8 + Math.random() * 0.6);
+      this.modeloLoaded.scale.setScalar(escalaAleatoria);
+      this.modeloLoaded.rotation.y = Math.random() * Math.PI * 2;
+
+      this.configurarSombras(this.modeloLoaded);
+      this.contenedor.add(this.modeloLoaded);
+    }
+  }
+
+  tieneModeloValido(): boolean {
+    return this.modeloLoaded !== null;
+  }
+}
+
 export class HousePrefab extends BasePrefab {
   constructor(ancho = 6.0, alto = 6.0) {
     super();
@@ -96,7 +140,6 @@ export class HousePrefab extends BasePrefab {
   private construirCabana(ancho: number, alto: number): void {
     const grupoCasa = new Group();
 
-    // Paredes de madera alineadas al AABB real
     const matParedes = new MeshStandardMaterial({
       color: 0x78350f,
       roughness: 0.7,
@@ -105,7 +148,6 @@ export class HousePrefab extends BasePrefab {
     const paredes = new Mesh(new BoxGeometry(ancho * 0.95, 3.2, alto * 0.95), matParedes);
     paredes.position.y = 1.6;
 
-    // Techo a dos aguas
     const matTecho = new MeshStandardMaterial({
       color: 0x451a03,
       roughness: 0.6,
@@ -114,7 +156,6 @@ export class HousePrefab extends BasePrefab {
     techo.position.y = 4.3;
     techo.rotation.y = Math.PI / 4;
 
-    // Marco de puerta
     const matPuerta = new MeshStandardMaterial({
       color: 0x292524,
       roughness: 0.9,
@@ -141,7 +182,6 @@ export class CajaPrefab extends BasePrefab {
   private construirCaja(ancho: number, alto: number): void {
     const grupoCaja = new Group();
 
-    // Caja base de madera reforzada
     const matMadera = new MeshStandardMaterial({
       color: 0xb45309,
       roughness: 0.6,
@@ -154,7 +194,6 @@ export class CajaPrefab extends BasePrefab {
     const cuerpoCaja = new Mesh(new BoxGeometry(tamanoXZ, alturaCaja, tamanoXZ), matMadera);
     cuerpoCaja.position.y = alturaCaja / 2;
 
-    // Herrajes de hierro en bordes
     const matHierro = new MeshStandardMaterial({
       color: 0x334155,
       roughness: 0.4,
@@ -165,7 +204,6 @@ export class CajaPrefab extends BasePrefab {
 
     grupoCaja.add(cuerpoCaja, marco);
 
-    // Apilamiento de caja secundaria superior en ángulo
     const tamanoSuperior = tamanoXZ * 0.55;
     const cuerpoSuperior = new Mesh(new BoxGeometry(tamanoSuperior, tamanoSuperior, tamanoSuperior), matMadera);
     cuerpoSuperior.position.set(tamanoXZ * 0.08, alturaCaja + tamanoSuperior / 2, -tamanoXZ * 0.08);

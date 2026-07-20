@@ -244,7 +244,7 @@ export class RendererTresD implements RendererJuego {
     this.actualizarBotines(estado.botines, ahoraMs);
     this.actualizarNumerosDanio(estado.numerosDanio);
     this.actualizarCamara(estado.jugadores, idJugadorPropio);
-    this.animarMundo(ahoraMs);
+    this.animarMundo(ahoraMs, deltaSec);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -500,11 +500,12 @@ export class RendererTresD implements RendererJuego {
   }
 
   /** Sway de copas + agua "respirando" en color y con oleaje de vertices (B5) — reutiliza los helpers de paleta-mapa. */
-  private animarMundo(ahoraMs: number): void {
+  private animarMundo(ahoraMs: number, deltaSec: number): void {
     if (this.mundo === null) {
       return;
     }
     const t = ahoraMs / 1000;
+    this.mundo.nubes.animar(deltaSec);
     for (const arbol of this.mundo.arboles) {
       arbol.copa.rotation.z = Math.sin(t * 1.5 + arbol.fase) * 0.05;
     }
