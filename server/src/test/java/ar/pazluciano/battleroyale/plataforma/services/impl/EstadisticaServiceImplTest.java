@@ -45,7 +45,8 @@ class EstadisticaServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        estadisticaService = new EstadisticaServiceImpl(
+        estadisticaService =
+                new EstadisticaServiceImpl(
                 estadisticaJugadorRepository,
                 usuarioRepository,
                 estadisticaMapper

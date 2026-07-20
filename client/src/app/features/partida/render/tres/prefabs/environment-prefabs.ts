@@ -4,12 +4,11 @@ import { AssetManager } from '../managers/asset-manager';
 import { BasePrefab } from './base-prefab';
 
 const CATALOGO_ARBOLES = [
+  'assets/vegetation/NormalTree_1.fbx', 'assets/vegetation/NormalTree_2.fbx', 'assets/vegetation/NormalTree_3.fbx', 'assets/vegetation/NormalTree_4.fbx', 'assets/vegetation/NormalTree_5.fbx',
   'assets/vegetation/MapleTree_1.gltf', 'assets/vegetation/MapleTree_2.gltf', 'assets/vegetation/MapleTree_3.gltf', 'assets/vegetation/MapleTree_4.gltf', 'assets/vegetation/MapleTree_5.gltf',
   'assets/vegetation/BirchTree_1.gltf', 'assets/vegetation/BirchTree_2.gltf', 'assets/vegetation/BirchTree_3.gltf', 'assets/vegetation/BirchTree_4.gltf', 'assets/vegetation/BirchTree_5.gltf',
-  'assets/vegetation/PineTree_1.fbx', 'assets/vegetation/PineTree_2.fbx', 'assets/vegetation/PineTree_3.fbx', 'assets/vegetation/PineTree_4.fbx', 'assets/vegetation/PineTree_5.fbx',
-  'assets/vegetation/NormalTree_1.fbx', 'assets/vegetation/NormalTree_2.fbx', 'assets/vegetation/NormalTree_3.fbx', 'assets/vegetation/NormalTree_4.fbx', 'assets/vegetation/NormalTree_5.fbx',
   'assets/vegetation/PalmTree_1.fbx', 'assets/vegetation/PalmTree_2.fbx', 'assets/vegetation/PalmTree_3.fbx', 'assets/vegetation/PalmTree_4.fbx', 'assets/vegetation/PalmTree_5.fbx',
-  'assets/vegetation/DeadTree_1.gltf'
+  'assets/vegetation/PineTree_1.fbx', 'assets/vegetation/PineTree_2.fbx', 'assets/vegetation/PineTree_3.fbx', 'assets/vegetation/PineTree_4.fbx', 'assets/vegetation/PineTree_5.fbx',
 ];
 
 const CATALOGO_ROCAS = [

@@ -1,7 +1,7 @@
 {
   "ARBOL": {
-    "model": "assets/vegetation/MapleTree_1.gltf",
-    "scale": 1.2,
+    "model": "assets/vegetation/NormalTree_1.fbx",
+    "scale": 0.016,
     "instanced": true,
     "collisionRadius": 1.2
   },
