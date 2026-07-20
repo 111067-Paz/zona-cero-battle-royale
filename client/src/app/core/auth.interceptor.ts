@@ -35,7 +35,7 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
           return next(reintento);
         }),
         catchError((errorRefresh: unknown) => {
-          authService.logout();
+          authService.notificarSesionExpirada();
           router.navigate(['/login']);
           return throwError(() => errorRefresh);
         }),

@@ -7,11 +7,6 @@ const CLAVE_ACCESS_TOKEN = 'zc.accessToken';
 const CLAVE_REFRESH_TOKEN = 'zc.refreshToken';
 const CLAVE_USUARIO = 'zc.usuario';
 
-/**
- * Dueno de la sesion (PLAN §4.2/§10-F5). Persiste en `localStorage` (decision confirmada: sin
- * cookies, la API es stateless) y expone el usuario actual como signal para que guards e
- * interceptor lean el MISMO estado sin duplicar parsing.
- */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
@@ -19,6 +14,7 @@ export class AuthService {
   private readonly usuarioSignal = signal<UsuarioDTO | null>(this.leerUsuarioGuardado());
   readonly usuarioActual = this.usuarioSignal.asReadonly();
   readonly estaAutenticado = computed(() => this.usuarioSignal() !== null);
+  readonly modalSesionExpiradaVisible = signal(false);
 
   register(request: RegisterRequest): Observable<AuthResponse> {
     return this.http
@@ -46,7 +42,15 @@ export class AuthService {
     this.usuarioSignal.set(null);
   }
 
-  /** Pisa el usuario persistido (p.ej. tras cambiar el personaje) sin tocar los tokens. */
+  notificarSesionExpirada(): void {
+    this.logout();
+    this.modalSesionExpiradaVisible.set(true);
+  }
+
+  cerrarModalExpiracion(): void {
+    this.modalSesionExpiradaVisible.set(false);
+  }
+
   actualizarUsuario(usuario: UsuarioDTO): void {
     localStorage.setItem(CLAVE_USUARIO, JSON.stringify(usuario));
     this.usuarioSignal.set(usuario);

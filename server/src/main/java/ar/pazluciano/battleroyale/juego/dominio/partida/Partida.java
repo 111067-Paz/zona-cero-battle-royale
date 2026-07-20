@@ -439,9 +439,7 @@ public class Partida implements VistaMundo {
             double rx = 12.0 + rng.nextDouble() * (ancho - 24.0);
             double ry = 12.0 + rng.nextDouble() * (alto - 24.0);
             Vector2 pos = new Vector2(rx, ry);
-            if (!colisiones.colisionaConObstaculo(pos, 0.5, mapa.getObstaculos())) {
-                botines.add(fabricaBotin.crear(contadorIdBotin++, pos, rng));
-            }
+            botines.add(fabricaBotin.crear(contadorIdBotin++, pos, rng));
         }
     }
 
