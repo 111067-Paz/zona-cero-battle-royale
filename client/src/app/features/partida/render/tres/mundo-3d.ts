@@ -58,10 +58,12 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
 
   // 3. Construir caminos de tierra (Dirt Trails)
   const matTierra = new MeshStandardMaterial({
-    color: 0x6b4c33,
+    color: 0x7c5837,
     roughness: 0.95,
     metalness: 0.05,
-    flatShading: true,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
 
   const anchoTotal = mapa.ancho;
@@ -75,7 +77,7 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
       const caminoGeo = new PlaneGeometry(deco.ancho, deco.alto);
       const caminoMesh = new Mesh(caminoGeo, matTierra);
       caminoMesh.rotation.x = -Math.PI / 2;
-      caminoMesh.position.copy(aVector3(cx, cy, 0.42));
+      caminoMesh.position.copy(aVector3(cx, cy, 0.02));
       caminoMesh.receiveShadow = true;
       grupo.add(caminoMesh);
     } else if (deco.tipo === 'RIO' || deco.tipo === 'LAGO') {
@@ -89,10 +91,13 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
         metalness: 0.8,
         transparent: true,
         opacity: 0.85,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
       });
       const aguaMesh = new Mesh(aguaGeo, matAgua);
       aguaMesh.rotation.x = -Math.PI / 2;
-      aguaMesh.position.copy(aVector3(cx, cy, 0.38));
+      aguaMesh.position.copy(aVector3(cx, cy, 0.01));
       aguaMesh.receiveShadow = true;
       grupo.add(aguaMesh);
 

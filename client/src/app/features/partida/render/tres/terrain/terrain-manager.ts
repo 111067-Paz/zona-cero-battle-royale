@@ -19,7 +19,7 @@ export class TerrainManager {
     const cfgTerrain = configMgr.terrain;
 
     const chunkSize = cfgTerrain?.chunkSize ?? 64;
-    const segments = cfgTerrain?.segments ?? 32;
+    const segments = cfgTerrain?.segments ?? 1;
 
     // Cargar texturas PBR si existen
     const matConfig = cfgTerrain?.materials?.['cesped'];
@@ -29,7 +29,7 @@ export class TerrainManager {
     const aoMap = matConfig?.aoMap ? await assetMgr.textures.cargarTextura(matConfig.aoMap) : null;
 
     const materialTerreno = MaterialFactory.createGrass({
-      color: 0x529432,
+      color: 0x478c2e,
       albedoMap: albedo,
       normalMap: normal,
       roughnessMap: roughnessMap,
@@ -44,21 +44,6 @@ export class TerrainManager {
     for (let ix = 0; ix < cantidadX; ix++) {
       for (let iy = 0; iy < cantidadY; iy++) {
         const geoChunk = new PlaneGeometry(chunkSize, chunkSize, segments, segments);
-
-        // ELEVACIÓN DE RELIEVE 3D: Lomas y desniveles suaves en el terreno
-        const posAttr = geoChunk.attributes['position'];
-        for (let k = 0; k < posAttr.count; k++) {
-          const vx = posAttr.getX(k) + (ix * chunkSize);
-          const vy = posAttr.getY(k) + (iy * chunkSize);
-
-          // Relieve suave y uniforme de lomas 3D sin clipping ni interrupciones de superficie
-          const elevacion = Math.sin(vx * 0.02) * Math.cos(vy * 0.02) * 0.35;
-
-          posAttr.setZ(k, elevacion);
-        }
-        posAttr.needsUpdate = true;
-        geoChunk.computeVertexNormals();
-
         const meshChunk = new Mesh(geoChunk, materialTerreno);
 
         meshChunk.rotation.x = -Math.PI / 2;
