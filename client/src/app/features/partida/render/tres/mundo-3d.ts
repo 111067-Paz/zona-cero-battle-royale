@@ -74,14 +74,15 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
 
       const caminoGeo = new PlaneGeometry(deco.ancho, deco.alto);
       const caminoMesh = new Mesh(caminoGeo, matTierra);
-      caminoMesh.position.copy(aVector3(cx, cy, 0.015));
+      caminoMesh.rotation.x = -Math.PI / 2;
+      caminoMesh.position.copy(aVector3(cx, cy, 0.08));
       caminoMesh.receiveShadow = true;
       grupo.add(caminoMesh);
     } else if (deco.tipo === 'RIO' || deco.tipo === 'LAGO') {
       const cx = deco.x + deco.ancho / 2;
       const cy = deco.y + deco.alto / 2;
 
-      const aguaGeo = new PlaneGeometry(deco.ancho, deco.alto);
+      const aguaGeo = new PlaneGeometry(deco.ancho, deco.alto, 16, 16);
       const matAgua = new MeshStandardMaterial({
         color: 0x0284c7,
         roughness: 0.1,
@@ -90,7 +91,9 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
         opacity: 0.85,
       });
       const aguaMesh = new Mesh(aguaGeo, matAgua);
-      aguaMesh.position.copy(aVector3(cx, cy, 0.01));
+      aguaMesh.rotation.x = -Math.PI / 2;
+      aguaMesh.position.copy(aVector3(cx, cy, 0.05));
+      aguaMesh.receiveShadow = true;
       grupo.add(aguaMesh);
 
       aguas.push({

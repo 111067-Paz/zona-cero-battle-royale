@@ -29,7 +29,7 @@ export class TerrainManager {
     const aoMap = matConfig?.aoMap ? await assetMgr.textures.cargarTextura(matConfig.aoMap) : null;
 
     const materialTerreno = MaterialFactory.createGrass({
-      color: 0x82c341,
+      color: 0x529432,
       albedoMap: albedo,
       normalMap: normal,
       roughnessMap: roughnessMap,
@@ -44,6 +44,22 @@ export class TerrainManager {
     for (let ix = 0; ix < cantidadX; ix++) {
       for (let iy = 0; iy < cantidadY; iy++) {
         const geoChunk = new PlaneGeometry(chunkSize, chunkSize, segments, segments);
+
+        // ELEVACIÓN DE RELIEVE 3D: Lomas y desniveles suaves en el terreno
+        const posAttr = geoChunk.attributes['position'];
+        for (let k = 0; k < posAttr.count; k++) {
+          const vx = posAttr.getX(k) + (ix * chunkSize);
+          const vy = posAttr.getY(k) + (iy * chunkSize);
+
+          // Generar lomas suaves compuestas por ondas seno/coseno
+          const elevacion = Math.sin(vx * 0.04) * Math.cos(vy * 0.04) * 1.6
+                          + Math.sin(vx * 0.09 + vy * 0.07) * 0.5;
+
+          posAttr.setZ(k, elevacion);
+        }
+        posAttr.needsUpdate = true;
+        geoChunk.computeVertexNormals();
+
         const meshChunk = new Mesh(geoChunk, materialTerreno);
 
         meshChunk.rotation.x = -Math.PI / 2;
