@@ -51,9 +51,8 @@ export class TerrainManager {
           const vx = posAttr.getX(k) + (ix * chunkSize);
           const vy = posAttr.getY(k) + (iy * chunkSize);
 
-          // Generar lomas suaves compuestas por ondas seno/coseno
-          const elevacion = Math.sin(vx * 0.04) * Math.cos(vy * 0.04) * 1.6
-                          + Math.sin(vx * 0.09 + vy * 0.07) * 0.5;
+          // Relieve suave y uniforme de lomas 3D sin clipping ni interrupciones de superficie
+          const elevacion = Math.sin(vx * 0.02) * Math.cos(vy * 0.02) * 0.35;
 
           posAttr.setZ(k, elevacion);
         }
