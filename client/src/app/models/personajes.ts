@@ -10,6 +10,8 @@ export type Personaje =
   | 'PIRATA_HENRY'
   | 'ESQUELETO'
   | 'TIBURON'
+  | 'MAKO'
+  | 'SHARK'
   | 'GATO'
   | 'DINO'
   | 'ROBO_PERRO'
@@ -34,6 +36,8 @@ export const PERSONAJES: Record<Personaje, EspecificacionPersonaje> = {
   PIRATA_HENRY: { id: 'PIRATA_HENRY', nombre: 'Pirata Henry', slug: 'pirata_henry', colorCuerpo: 0x3b82f6, colorDetalle: 0xdbeafe },
   ESQUELETO: { id: 'ESQUELETO', nombre: 'Esqueleto Pirata', slug: 'esqueleto', colorCuerpo: 0x94a3b8, colorDetalle: 0xf1f5f9 },
   TIBURON: { id: 'TIBURON', nombre: 'Tiburón Pirata', slug: 'tiburon', colorCuerpo: 0x06b6d4, colorDetalle: 0xcffafe },
+  MAKO: { id: 'MAKO', nombre: 'Pirata Mako', slug: 'pirata_henry', colorCuerpo: 0x10b981, colorDetalle: 0xd1fae5 },
+  SHARK: { id: 'SHARK', nombre: 'Tiburón Voraz', slug: 'tiburon', colorCuerpo: 0x6366f1, colorDetalle: 0xe0e7ff },
 
   // Compatibilidad legacy
   GATO: { id: 'GATO', nombre: 'Capitán Barbarroja', slug: 'barbarroja', colorCuerpo: 0xd97706, colorDetalle: 0xfef3c7 },
@@ -57,6 +61,8 @@ export const LISTA_PERSONAJES: readonly Personaje[] = [
   'PIRATA_HENRY',
   'ESQUELETO',
   'TIBURON',
+  'MAKO',
+  'SHARK',
 ];
 
 const PERSONAJE_POR_DEFECTO: Personaje = 'BARBARROJA';
