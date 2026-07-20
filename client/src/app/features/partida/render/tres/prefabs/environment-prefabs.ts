@@ -88,30 +88,30 @@ export class RockPrefab extends BasePrefab {
 }
 
 export class HousePrefab extends BasePrefab {
-  constructor() {
+  constructor(ancho = 6.0, alto = 6.0) {
     super();
-    this.construirCabana();
+    this.construirCabana(ancho, alto);
   }
 
-  private construirCabana(): void {
+  private construirCabana(ancho: number, alto: number): void {
     const grupoCasa = new Group();
 
-    // Paredes de madera
+    // Paredes de madera alineadas al AABB real
     const matParedes = new MeshStandardMaterial({
       color: 0x78350f,
       roughness: 0.7,
       metalness: 0.1,
     });
-    const paredes = new Mesh(new BoxGeometry(3.6, 2.6, 3.6), matParedes);
-    paredes.position.y = 1.3;
+    const paredes = new Mesh(new BoxGeometry(ancho * 0.95, 3.2, alto * 0.95), matParedes);
+    paredes.position.y = 1.6;
 
-    // Techo a dos aguas de paja / madera oscura
+    // Techo a dos aguas
     const matTecho = new MeshStandardMaterial({
       color: 0x451a03,
       roughness: 0.6,
     });
-    const techo = new Mesh(new ConeGeometry(3.2, 1.8, 4), matTecho);
-    techo.position.y = 3.5;
+    const techo = new Mesh(new ConeGeometry(Math.max(ancho, alto) * 0.75, 2.2, 4), matTecho);
+    techo.position.y = 4.3;
     techo.rotation.y = Math.PI / 4;
 
     // Marco de puerta
@@ -119,8 +119,8 @@ export class HousePrefab extends BasePrefab {
       color: 0x292524,
       roughness: 0.9,
     });
-    const puerta = new Mesh(new BoxGeometry(1.0, 1.8, 3.65), matPuerta);
-    puerta.position.set(0, 0.9, 0);
+    const puerta = new Mesh(new BoxGeometry(1.2, 2.2, alto * 0.96), matPuerta);
+    puerta.position.set(0, 1.1, 0);
 
     grupoCasa.add(paredes, techo, puerta);
     this.configurarSombras(grupoCasa);
@@ -133,22 +133,23 @@ export class HousePrefab extends BasePrefab {
 }
 
 export class CajaPrefab extends BasePrefab {
-  constructor() {
+  constructor(ancho = 3.5, alto = 3.5) {
     super();
-    this.construirCaja();
+    this.construirCaja(ancho, alto);
   }
 
-  private construirCaja(): void {
+  private construirCaja(ancho: number, alto: number): void {
     const grupoCaja = new Group();
 
-    // Caja de madera reforzada
+    // Caja de madera reforzada escalada exactamente al AABB de colisión
     const matMadera = new MeshStandardMaterial({
       color: 0xb45309,
       roughness: 0.6,
       metalness: 0.2,
     });
-    const cuerpoCaja = new Mesh(new BoxGeometry(1.6, 1.6, 1.6), matMadera);
-    cuerpoCaja.position.y = 0.8;
+    const tamanoXZ = Math.min(ancho, alto) * 0.95;
+    const cuerpoCaja = new Mesh(new BoxGeometry(tamanoXZ, tamanoXZ, tamanoXZ), matMadera);
+    cuerpoCaja.position.y = tamanoXZ / 2;
 
     // Herrajes de hierro en bordes
     const matHierro = new MeshStandardMaterial({
@@ -156,8 +157,8 @@ export class CajaPrefab extends BasePrefab {
       roughness: 0.4,
       metalness: 0.8,
     });
-    const marco = new Mesh(new BoxGeometry(1.64, 0.22, 1.64), matHierro);
-    marco.position.y = 0.8;
+    const marco = new Mesh(new BoxGeometry(tamanoXZ * 1.02, tamanoXZ * 0.15, tamanoXZ * 1.02), matHierro);
+    marco.position.y = tamanoXZ / 2;
 
     grupoCaja.add(cuerpoCaja, marco);
     this.configurarSombras(grupoCaja);

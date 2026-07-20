@@ -128,13 +128,13 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
         break;
       }
       case 'CARPA': {
-        const houseP = new HousePrefab();
+        const houseP = new HousePrefab(obstaculo.ancho, obstaculo.alto);
         houseP.contenedor.position.copy(aVector3(cx, cy));
         grupo.add(houseP.contenedor);
         break;
       }
       case 'CAJA': {
-        const cajaP = new CajaPrefab();
+        const cajaP = new CajaPrefab(obstaculo.ancho, obstaculo.alto);
         cajaP.contenedor.position.copy(aVector3(cx, cy));
         grupo.add(cajaP.contenedor);
         break;

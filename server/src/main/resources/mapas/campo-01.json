@@ -3,15 +3,15 @@
   "ancho": 256,
   "alto": 256,
   "obstaculos": [
-    { "x": 60,  "y": 60,  "ancho": 20, "alto": 20, "tipo": "CAJA" },
-    { "x": 180, "y": 50,  "ancho": 24, "alto": 12, "tipo": "CARPA" },
-    { "x": 110, "y": 110, "ancho": 30, "alto": 30, "tipo": "ARBOL" },
-    { "x": 40,  "y": 170, "ancho": 16, "alto": 40, "tipo": "ROCA" },
-    { "x": 200, "y": 180, "ancho": 22, "alto": 22, "tipo": "CAJA" },
-    { "x": 150, "y": 200, "ancho": 30, "alto": 14, "tipo": "CARPA" },
-    { "x": 90,  "y": 40,  "ancho": 10, "alto": 10, "tipo": "ROCA" },
-    { "x": 210, "y": 110, "ancho": 14, "alto": 30, "tipo": "ARBOL" },
-    { "x": 70,  "y": 130, "ancho": 18, "alto": 18, "tipo": "CAJA" }
+    { "x": 60,  "y": 60,  "ancho": 4,  "alto": 4,  "tipo": "CAJA" },
+    { "x": 180, "y": 50,  "ancho": 8,  "alto": 6,  "tipo": "CARPA" },
+    { "x": 110, "y": 110, "ancho": 8,  "alto": 8,  "tipo": "ARBOL" },
+    { "x": 40,  "y": 170, "ancho": 6,  "alto": 10, "tipo": "ROCA" },
+    { "x": 200, "y": 180, "ancho": 4,  "alto": 4,  "tipo": "CAJA" },
+    { "x": 150, "y": 200, "ancho": 8,  "alto": 6,  "tipo": "CARPA" },
+    { "x": 90,  "y": 40,  "ancho": 5,  "alto": 5,  "tipo": "ROCA" },
+    { "x": 210, "y": 110, "ancho": 8,  "alto": 8,  "tipo": "ARBOL" },
+    { "x": 70,  "y": 130, "ancho": 4,  "alto": 4,  "tipo": "CAJA" }
   ],
   "spawns": [
     { "x": 20,  "y": 20  },
