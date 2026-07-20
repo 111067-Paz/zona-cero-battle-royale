@@ -31,6 +31,9 @@ export class EntradaService {
     const code = e.code.toLowerCase();
     this.teclas.add(tecla);
     this.teclas.add(code);
+    if (e.shiftKey) {
+      this.teclas.add('shift');
+    }
 
     if (e.repeat) {
       return;
@@ -47,6 +50,9 @@ export class EntradaService {
   private readonly alSoltar = (e: KeyboardEvent) => {
     this.teclas.delete(e.key.toLowerCase());
     this.teclas.delete(e.code.toLowerCase());
+    if (!e.shiftKey) {
+      this.teclas.delete('shift');
+    }
   };
 
   private readonly alMover = (e: MouseEvent) => {
@@ -255,9 +261,9 @@ export class EntradaService {
       x += 1;
     }
 
-    // SPRINT CON TECLA SHIFT
+    // SPRINT CON TECLA SHIFT (1.8x)
     const esSprint = this.teclas.has('shift') || this.teclas.has('shiftleft') || this.teclas.has('shiftright');
-    const factorSprint = esSprint ? 1.6 : 1.0;
+    const factorSprint = esSprint ? 1.8 : 1.0;
 
     return { x: x * factorSprint, y: y * factorSprint };
   }

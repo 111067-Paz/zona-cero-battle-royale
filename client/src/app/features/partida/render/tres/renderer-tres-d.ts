@@ -253,7 +253,7 @@ export class RendererTresD implements RendererJuego {
       const entidad = this.jugadores.get(this.idPropioActual);
       if (entidad && !entidad.saltando && !entidad.muerto) {
         entidad.saltando = true;
-        entidad.velocidadSalto = 6.0;
+        entidad.velocidadSalto = 7.8;
       }
     }
   }
@@ -310,8 +310,8 @@ export class RendererTresD implements RendererJuego {
     entidad.posicionAnterior = { x: jugador.x, y: jugador.y };
 
     if (entidad.saltando) {
-      entidad.alturaSalto += entidad.velocidadSalto * 0.016;
-      entidad.velocidadSalto -= 18.0 * 0.016;
+      entidad.alturaSalto += entidad.velocidadSalto * 0.04;
+      entidad.velocidadSalto -= 14.0 * 0.04;
       if (entidad.alturaSalto <= 0) {
         entidad.alturaSalto = 0;
         entidad.velocidadSalto = 0;

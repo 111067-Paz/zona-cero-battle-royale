@@ -186,9 +186,7 @@ export class PartidaComponent implements AfterViewInit, OnDestroy {
 
     this.conexion.conectar();
     this.entrada.onSalto(() => {
-      if (this.renderer instanceof RendererTresD) {
-        this.renderer.saltarJugadorPropio();
-      }
+      this.renderer.saltarJugadorPropio?.();
     });
     this.entrada.iniciar(this.lienzoActual, (input) => {
       this.conexion.enviar(input);

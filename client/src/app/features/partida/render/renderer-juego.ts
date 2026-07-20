@@ -22,4 +22,7 @@ export interface RendererJuego {
 
   /** Libera recursos del contexto de dibujo. */
   destruir(): void;
+
+  /** Gatilla el salto visual del personaje propio si el renderer soporta proyeccion elevable. */
+  saltarJugadorPropio?(): void;
 }
