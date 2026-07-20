@@ -5,6 +5,7 @@ import ar.pazluciano.battleroyale.plataforma.entities.EstadisticaJugador;
 import ar.pazluciano.battleroyale.plataforma.entities.Usuario;
 import ar.pazluciano.battleroyale.plataforma.mappers.EstadisticaMapper;
 import ar.pazluciano.battleroyale.plataforma.repositories.EstadisticaJugadorRepository;
+import ar.pazluciano.battleroyale.plataforma.repositories.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -22,7 +23,8 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,13 +37,19 @@ class EstadisticaServiceImplTest {
     @Mock
     private EstadisticaJugadorRepository estadisticaJugadorRepository;
     @Mock
+    private UsuarioRepository usuarioRepository;
+    @Mock
     private EstadisticaMapper estadisticaMapper;
 
     private EstadisticaServiceImpl estadisticaService;
 
     @BeforeEach
     void setUp() {
-        estadisticaService = new EstadisticaServiceImpl(estadisticaJugadorRepository, estadisticaMapper);
+        estadisticaService = new EstadisticaServiceImpl(
+                estadisticaJugadorRepository,
+                usuarioRepository,
+                estadisticaMapper
+        );
     }
 
     @Test
@@ -61,15 +69,24 @@ class EstadisticaServiceImplTest {
     }
 
     @Test
-    @DisplayName("misEstadisticas sin fila de estadisticas lanza IllegalStateException (invariante roto)")
-    void misEstadisticas_usuarioSinFilaDeEstadisticas_lanzaIllegalState() {
+    @DisplayName("misEstadisticas sin fila de estadisticas crea la fila defensivamente (Lazy Init) y devuelve el DTO")
+    void misEstadisticas_usuarioSinFilaDeEstadisticas_creaFilaDefensivamente() {
         // GIVEN
-        when(estadisticaJugadorRepository.findByUsuarioId(ID_USUARIO)).thenReturn(Optional.empty());
+        Usuario usuario = usuarioDe(ID_USUARIO);
+        EstadisticaJugador nuevaEntidad = new EstadisticaJugador(usuario);
+        EstadisticaDTO dto = EstadisticaDTO.builder().nombreUsuario("jugador7").build();
 
-        // WHEN + THEN
-        IllegalStateException excepcion = assertThrows(IllegalStateException.class,
-                () -> estadisticaService.misEstadisticas(ID_USUARIO));
-        assertEquals("Usuario autenticado sin fila de estadisticas: " + ID_USUARIO, excepcion.getMessage());
+        when(estadisticaJugadorRepository.findByUsuarioId(ID_USUARIO)).thenReturn(Optional.empty());
+        when(usuarioRepository.findById(ID_USUARIO)).thenReturn(Optional.of(usuario));
+        when(estadisticaJugadorRepository.save(any(EstadisticaJugador.class))).thenReturn(nuevaEntidad);
+        when(estadisticaMapper.toDTO(nuevaEntidad)).thenReturn(dto);
+
+        // WHEN
+        EstadisticaDTO resultado = estadisticaService.misEstadisticas(ID_USUARIO);
+
+        // THEN
+        assertNotNull(resultado);
+        assertEquals("jugador7", resultado.getNombreUsuario());
     }
 
     @Test
@@ -96,9 +113,13 @@ class EstadisticaServiceImplTest {
         assertEquals("jugador2", resultado.getContent().get(1).getNombreUsuario());
     }
 
-    private EstadisticaJugador estadisticaDe(Long idUsuario) {
+    private Usuario usuarioDe(Long idUsuario) {
         Usuario usuario = new Usuario("jugador" + idUsuario, "jugador" + idUsuario + "@test.com", "hash");
         ReflectionTestUtils.setField(usuario, "id", idUsuario);
-        return new EstadisticaJugador(usuario);
+        return usuario;
+    }
+
+    private EstadisticaJugador estadisticaDe(Long idUsuario) {
+        return new EstadisticaJugador(usuarioDe(idUsuario));
     }
 }
