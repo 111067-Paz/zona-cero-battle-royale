@@ -133,7 +133,7 @@ export class HousePrefab extends BasePrefab {
 }
 
 export class CajaPrefab extends BasePrefab {
-  constructor(ancho = 3.5, alto = 3.5) {
+  constructor(ancho = 2.4, alto = 2.4) {
     super();
     this.construirCaja(ancho, alto);
   }
@@ -141,15 +141,18 @@ export class CajaPrefab extends BasePrefab {
   private construirCaja(ancho: number, alto: number): void {
     const grupoCaja = new Group();
 
-    // Caja de madera reforzada escalada exactamente al AABB de colisión
+    // Caja base de madera reforzada
     const matMadera = new MeshStandardMaterial({
       color: 0xb45309,
       roughness: 0.6,
       metalness: 0.2,
     });
-    const tamanoXZ = Math.min(ancho, alto) * 0.95;
-    const cuerpoCaja = new Mesh(new BoxGeometry(tamanoXZ, tamanoXZ, tamanoXZ), matMadera);
-    cuerpoCaja.position.y = tamanoXZ / 2;
+
+    const tamanoXZ = Math.min(ancho, alto) * 0.92;
+    const alturaCaja = Math.min(tamanoXZ, 1.4);
+
+    const cuerpoCaja = new Mesh(new BoxGeometry(tamanoXZ, alturaCaja, tamanoXZ), matMadera);
+    cuerpoCaja.position.y = alturaCaja / 2;
 
     // Herrajes de hierro en bordes
     const matHierro = new MeshStandardMaterial({
@@ -157,10 +160,23 @@ export class CajaPrefab extends BasePrefab {
       roughness: 0.4,
       metalness: 0.8,
     });
-    const marco = new Mesh(new BoxGeometry(tamanoXZ * 1.02, tamanoXZ * 0.15, tamanoXZ * 1.02), matHierro);
-    marco.position.y = tamanoXZ / 2;
+    const marco = new Mesh(new BoxGeometry(tamanoXZ * 1.02, alturaCaja * 0.18, tamanoXZ * 1.02), matHierro);
+    marco.position.y = alturaCaja / 2;
 
     grupoCaja.add(cuerpoCaja, marco);
+
+    // Apilamiento de caja secundaria superior en ángulo
+    const tamanoSuperior = tamanoXZ * 0.55;
+    const cuerpoSuperior = new Mesh(new BoxGeometry(tamanoSuperior, tamanoSuperior, tamanoSuperior), matMadera);
+    cuerpoSuperior.position.set(tamanoXZ * 0.08, alturaCaja + tamanoSuperior / 2, -tamanoXZ * 0.08);
+    cuerpoSuperior.rotation.y = 0.28;
+
+    const marcoSuperior = new Mesh(new BoxGeometry(tamanoSuperior * 1.03, tamanoSuperior * 0.2, tamanoSuperior * 1.03), matHierro);
+    marcoSuperior.position.copy(cuerpoSuperior.position);
+    marcoSuperior.rotation.y = cuerpoSuperior.rotation.y;
+
+    grupoCaja.add(cuerpoSuperior, marcoSuperior);
+
     this.configurarSombras(grupoCaja);
     this.contenedor.add(grupoCaja);
   }

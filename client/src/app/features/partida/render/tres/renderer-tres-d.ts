@@ -65,6 +65,9 @@ interface EntidadJugador {
   hpMostrado: number | null;
   muerto: boolean;
   posicionAnterior: { x: number; y: number } | null;
+  alturaSalto: number;
+  velocidadSalto: number;
+  saltando: boolean;
 }
 
 interface TextoDanio {
@@ -110,6 +113,7 @@ export class RendererTresD implements RendererJuego {
   private alMoverMouse: ((e: MouseEvent) => void) | null = null;
   private alTeclaV: ((e: KeyboardEvent) => void) | null = null;
   private tipoCamara: 'tercera' | 'primera' = 'tercera';
+  private idPropioActual: string | null = null;
   private ultimoFrameMs = performance.now();
 
   async iniciar(canvas: HTMLCanvasElement): Promise<void> {
@@ -234,6 +238,7 @@ export class RendererTresD implements RendererJuego {
     this.ultimoFrameMs = ahoraMs;
 
     this.zona?.actualizar(estado.zona);
+    this.idPropioActual = idJugadorPropio;
     this.actualizarJugadores(estado.jugadores, idJugadorPropio, ahoraMs, deltaSec);
     this.actualizarProyectiles(estado.proyectiles);
     this.actualizarBotines(estado.botines, ahoraMs);
@@ -241,6 +246,16 @@ export class RendererTresD implements RendererJuego {
     this.actualizarCamara(estado.jugadores, idJugadorPropio);
     this.animarMundo(ahoraMs);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  saltarJugadorPropio(): void {
+    if (this.idPropioActual) {
+      const entidad = this.jugadores.get(this.idPropioActual);
+      if (entidad && !entidad.saltando && !entidad.muerto) {
+        entidad.saltando = true;
+        entidad.velocidadSalto = 6.0;
+      }
+    }
   }
 
   /** Diffing con retencion (Decision #7): crea/actualiza/quita rigs de chibi segun el snapshot, nunca reconstruye por frame. */
@@ -285,7 +300,7 @@ export class RendererTresD implements RendererJuego {
     hp.sprite.position.y = ALTURA_TOPE_CABEZA + 0.35;
     rig.raiz.add(hp.sprite);
 
-    return { rig, anillo, hp, hpMostrado: null, muerto: false, posicionAnterior: null };
+    return { rig, anillo, hp, hpMostrado: null, muerto: false, posicionAnterior: null, alturaSalto: 0, velocidadSalto: 0, saltando: false };
   }
 
   private actualizarEntidadJugador(entidad: EntidadJugador, jugador: JugadorVisual, propio: boolean, ahoraMs: number): void {
@@ -294,7 +309,20 @@ export class RendererTresD implements RendererJuego {
       : Math.hypot(jugador.x - entidad.posicionAnterior.x, jugador.y - entidad.posicionAnterior.y);
     entidad.posicionAnterior = { x: jugador.x, y: jugador.y };
 
-    entidad.rig.raiz.position.copy(aVector3(jugador.x, jugador.y));
+    if (entidad.saltando) {
+      entidad.alturaSalto += entidad.velocidadSalto * 0.016;
+      entidad.velocidadSalto -= 18.0 * 0.016;
+      if (entidad.alturaSalto <= 0) {
+        entidad.alturaSalto = 0;
+        entidad.velocidadSalto = 0;
+        entidad.saltando = false;
+      }
+    }
+
+    const pos = aVector3(jugador.x, jugador.y);
+    pos.y += entidad.alturaSalto;
+    entidad.rig.raiz.position.copy(pos);
+
     const muerto = jugador.estadoVida === 'MUERTO';
     if (muerto !== entidad.muerto) {
       this.aplicarEstadoVida(entidad, muerto);
