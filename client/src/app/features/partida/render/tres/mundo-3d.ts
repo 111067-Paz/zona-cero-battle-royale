@@ -173,7 +173,7 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
     }
   }
 
-  // 5. Poblar masa masiva instanciada de pasto, flores, ramas y arbustos decorativos en VRAM (850+ elementos)
+  // 5. Poblar masa masiva instanciada de pasto, flores, ramas, palmeras, pinos y arbustos decorativos en VRAM (8,000 elementos)
   const tiposInstancias: { [key: string]: Matrix4[] } = {
     'assets/vegetation/Grass_Large.gltf': [],
     'assets/vegetation/Grass_Small.gltf': [],
@@ -196,12 +196,26 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
     'assets/vegetation/Plant_Flowers.fbx': [],
     'assets/rocks/Rock_1.fbx': [],
     'assets/rocks/Rock_2.fbx': [],
+    'assets/vegetation/PalmTree_1.fbx': [],
+    'assets/vegetation/PalmTree_2.fbx': [],
+    'assets/vegetation/PalmTree_3.fbx': [],
+    'assets/vegetation/PineTree_1.fbx': [],
+    'assets/vegetation/PineTree_2.fbx': [],
+    'assets/vegetation/PineTree_3.fbx': [],
+    'assets/vegetation/NormalTree_1.fbx': [],
+    'assets/vegetation/NormalTree_2.fbx': [],
+    'assets/vegetation/MapleTree_1.gltf': [],
+    'assets/vegetation/MapleTree_2.gltf': [],
+    'assets/vegetation/BirchTree_1.gltf': [],
+    'assets/vegetation/BirchTree_2.gltf': [],
+    'assets/vegetation/DeadTree_1.gltf': [],
+    'assets/vegetation/DeadTree_2.gltf': [],
   };
 
   const clavesInstancias = Object.keys(tiposInstancias);
 
-  // Sembrar 6,000 elementos de vegetacion tupida e intensa por toda la superficie gracias al patron FLYWEIGHT
-  for (let i = 0; i < 6000; i++) {
+  // Sembrar 8,000 elementos de bosques, palmeras, pinos, pasto y flores tupidas por toda la superficie gracias al patron FLYWEIGHT
+  for (let i = 0; i < 8000; i++) {
     const rx = 4 + Math.random() * (anchoTotal - 8);
     const ry = 4 + Math.random() * (altoTotal - 8);
     const tipoTarget = clavesInstancias[i % clavesInstancias.length];
@@ -209,10 +223,16 @@ export function construirMundo3D(mapa: Mapa): Mundo3D {
     const mat = new Matrix4();
     const pos = aVector3(rx, ry, 0);
     const rotY = Math.random() * Math.PI * 2;
-    let scale = 0.8 + Math.random() * 0.6;
+    let scale = 0.8 + Math.random() * 0.5;
 
-    if (tipoTarget.endsWith('.fbx')) {
-      scale = 0.014;
+    if (tipoTarget.includes('PalmTree')) {
+      scale = 0.018 + Math.random() * 0.006;
+    } else if (tipoTarget.includes('PineTree') || tipoTarget.includes('NormalTree')) {
+      scale = 0.016 + Math.random() * 0.005;
+    } else if (tipoTarget.includes('Rock') || tipoTarget.includes('Plant')) {
+      scale = 0.014 + Math.random() * 0.005;
+    } else if (tipoTarget.endsWith('.gltf') && tipoTarget.includes('Tree')) {
+      scale = 1.0 + Math.random() * 0.4;
     }
 
     mat.makeRotationY(rotY);
